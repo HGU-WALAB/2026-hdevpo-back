@@ -80,8 +80,7 @@ public class AuthService {
                 key
         );
 
-        log.info("✅ Generated AccessToken: {}", accessToken);
-        log.info("✅ Generated RefreshToken: {}", refreshToken);
+        log.info("✅ Generated access and refresh tokens for user: {}", loggedInUser.getUniqueId());
 
         // ✅ dto.getToken() 사용 ❌ → 백엔드에서 생성한 토큰 사용
         return AuthDto.builder()

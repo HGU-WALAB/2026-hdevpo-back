@@ -14,11 +14,22 @@ public class SwManagerSetting {
     @Column(name = "current_semester", length = 20)
     private String currentSemester;
 
+    @Column(name = "maintenance_mode")
+    private Integer maintenanceMode;
+
     public String getCurrentSemester() {
         return currentSemester;
     }
 
     public void setCurrentSemester(String currentSemester) {
         this.currentSemester = currentSemester;
+    }
+
+    public Integer getMaintenanceMode() {
+        return maintenanceMode;
+    }
+
+    public void setMaintenanceMode(Integer maintenanceMode) {
+        this.maintenanceMode = maintenanceMode;
     }
 }

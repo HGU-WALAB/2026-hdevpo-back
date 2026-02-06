@@ -25,6 +25,7 @@ public class Manager {
     @Column(name = "reg_end")
     private String regEnd;
 
-    @Column(name = "contact_info", length = 200)
-    private String contactInfo;
+    /** MyPage announcement text (e.g. scholarship notice). */
+    @Column(name = "mypage_announcement", length = 500)
+    private String mypageAnnouncement;
 }
