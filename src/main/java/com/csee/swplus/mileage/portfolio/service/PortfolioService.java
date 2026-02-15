@@ -9,6 +9,7 @@ import com.csee.swplus.mileage.portfolio.dto.MileageListResponse;
 import com.csee.swplus.mileage.portfolio.dto.RepoEntryRequest;
 import com.csee.swplus.mileage.portfolio.dto.RepoEntryResponse;
 import com.csee.swplus.mileage.portfolio.dto.RepositoriesResponse;
+import com.csee.swplus.mileage.portfolio.dto.SettingsResponse;
 import com.csee.swplus.mileage.portfolio.dto.TechStackResponse;
 import com.csee.swplus.mileage.portfolio.dto.UserInfoResponse;
 import com.csee.swplus.mileage.portfolio.entity.Portfolio;
@@ -262,5 +263,29 @@ public class PortfolioService {
                 .additional_info(e.getAdditionalInfo())
                 .display_order(e.getDisplayOrder())
                 .build();
+    }
+
+    private static final java.util.List<String> DEFAULT_SECTION_ORDER = java.util.Arrays.asList("tech", "repo", "activities", "mileage");
+
+    /**
+     * GET /api/portfolio/settings – 섹션 순서 (유저 정보는 프론트에서 상단 고정).
+     */
+    public SettingsResponse getSettings(Users user) {
+        Portfolio portfolio = getOrCreatePortfolio(user);
+        java.util.List<String> order = portfolio.getSectionOrder();
+        if (order == null || order.isEmpty()) {
+            order = DEFAULT_SECTION_ORDER;
+        }
+        return SettingsResponse.builder().section_order(order).build();
+    }
+
+    /**
+     * PUT /api/portfolio/settings – 섹션 순서 변경.
+     */
+    public SettingsResponse putSettings(Users user, java.util.List<String> sectionOrder) {
+        Portfolio portfolio = getOrCreatePortfolio(user);
+        portfolio.setSectionOrder(sectionOrder != null && !sectionOrder.isEmpty() ? sectionOrder : DEFAULT_SECTION_ORDER);
+        portfolioRepository.save(portfolio);
+        return getSettings(user);
     }
 }

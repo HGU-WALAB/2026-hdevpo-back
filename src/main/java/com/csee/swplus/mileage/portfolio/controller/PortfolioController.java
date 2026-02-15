@@ -10,6 +10,8 @@ import com.csee.swplus.mileage.portfolio.dto.MileageListResponse;
 import com.csee.swplus.mileage.portfolio.dto.MileageUpdateRequest;
 import com.csee.swplus.mileage.portfolio.dto.RepoEntryRequest;
 import com.csee.swplus.mileage.portfolio.dto.RepositoriesResponse;
+import com.csee.swplus.mileage.portfolio.dto.SettingsPutRequest;
+import com.csee.swplus.mileage.portfolio.dto.SettingsResponse;
 import com.csee.swplus.mileage.portfolio.dto.TechStackPutRequest;
 import com.csee.swplus.mileage.portfolio.dto.TechStackResponse;
 import com.csee.swplus.mileage.portfolio.dto.UserInfoPatchRequest;
@@ -170,6 +172,25 @@ public class PortfolioController {
         Users user = getCurrentUser();
         portfolioService.unlinkMileage(user, id);
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * GET /api/portfolio/settings – 섹션 순서 (유저 정보는 상단 고정).
+     */
+    @GetMapping("/settings")
+    public ResponseEntity<SettingsResponse> getSettings() {
+        Users user = getCurrentUser();
+        return ResponseEntity.ok(portfolioService.getSettings(user));
+    }
+
+    /**
+     * PUT /api/portfolio/settings – 섹션 레이아웃 순서 변경.
+     * Body: { "section_order": ["tech", "repo", "activities", "mileage"] }
+     */
+    @PutMapping("/settings")
+    public ResponseEntity<SettingsResponse> putSettings(@RequestBody SettingsPutRequest request) {
+        Users user = getCurrentUser();
+        return ResponseEntity.ok(portfolioService.putSettings(user, request != null ? request.getSection_order() : null));
     }
 
     private Users getCurrentUser() {
