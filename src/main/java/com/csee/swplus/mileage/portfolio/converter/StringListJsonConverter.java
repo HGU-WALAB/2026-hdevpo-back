@@ -31,7 +31,7 @@ public class StringListJsonConverter implements AttributeConverter<List<String>,
 
     @Override
     public List<String> convertToEntityAttribute(String dbData) {
-        if (dbData == null || dbData.isBlank()) {
+        if (dbData == null || dbData.trim().isEmpty()) {
             return new ArrayList<>();
         }
         try {
