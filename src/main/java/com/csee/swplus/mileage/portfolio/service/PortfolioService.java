@@ -275,13 +275,24 @@ public class PortfolioService {
                 });
     }
 
-    private static MileageEntryResponse toMileageEntryResponse(PortfolioMileageEntry e) {
-        return MileageEntryResponse.builder()
+    private MileageEntryResponse toMileageEntryResponse(PortfolioMileageEntry e) {
+        // 기본 포트폴리오 링크 정보
+        MileageEntryResponse.MileageEntryResponseBuilder builder = MileageEntryResponse.builder()
                 .id(e.getId())
                 .mileage_id(e.getMileageId())
                 .additional_info(e.getAdditionalInfo())
-                .display_order(e.getDisplayOrder())
-                .build();
+                .display_order(e.getDisplayOrder());
+
+        // 원본 마일리지(_sw_mileage_record)에서 추가 정보 조회 (있으면 세팅)
+        etcSubitemRepository.findById(e.getMileageId().intValue())
+                .ifPresent(record -> {
+                    builder.subitemId(record.getSubitemId());
+                    builder.categoryId(record.getCategoryId());
+                    builder.semester(record.getSemester());
+                    builder.description1(record.getDescription1());
+                });
+
+        return builder.build();
     }
 
     private static final java.util.List<String> DEFAULT_SECTION_ORDER = java.util.Arrays.asList("tech", "repo", "activities", "mileage");
