@@ -152,11 +152,13 @@ public class PortfolioService {
     }
 
     /**
-     * GET /api/portfolio/activities – 활동 목록.
+     * GET /api/portfolio/activities – 활동 목록. Optional filter: ?category=1&category=2 (default: full list).
      */
-    public ActivitiesResponse getActivities(Users user) {
+    public ActivitiesResponse getActivities(Users user, java.util.List<Integer> categories) {
         Portfolio portfolio = getOrCreatePortfolio(user);
-        java.util.List<PortfolioActivity> list = portfolioActivityRepository.findByPortfolio_IdOrderByDisplayOrderAscStartDateDesc(portfolio.getId());
+        java.util.List<PortfolioActivity> list = (categories != null && !categories.isEmpty())
+                ? portfolioActivityRepository.findByPortfolio_IdAndCategoryInOrderByDisplayOrderAscStartDateDesc(portfolio.getId(), categories)
+                : portfolioActivityRepository.findByPortfolio_IdOrderByDisplayOrderAscStartDateDesc(portfolio.getId());
         java.util.List<ActivityResponse> responses = new java.util.ArrayList<>();
         for (PortfolioActivity a : list) {
             responses.add(toActivityResponse(a));
@@ -230,7 +232,7 @@ public class PortfolioService {
      */
     public ActivitiesResponse patchActivities(Users user, java.util.List<ActivityPatchItemRequest> request) {
         if (request == null || request.isEmpty()) {
-            return getActivities(user);
+            return getActivities(user, null);
         }
         Portfolio portfolio = getOrCreatePortfolio(user);
         for (ActivityPatchItemRequest item : request) {
@@ -244,7 +246,7 @@ public class PortfolioService {
             if (item.getCategory() != null) activity.setCategory(item.getCategory());
             portfolioActivityRepository.save(activity);
         }
-        return getActivities(user);
+        return getActivities(user, null);
     }
 
     /**

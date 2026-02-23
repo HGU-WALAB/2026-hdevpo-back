@@ -205,12 +205,13 @@ public class PortfolioController {
     }
 
     /**
-     * GET /api/portfolio/activities – 활동 목록.
+     * GET /api/portfolio/activities – 활동 목록. Optional: ?category=1&category=2 to filter by category (default: full list).
      */
     @GetMapping("/activities")
-    public ResponseEntity<ActivitiesResponse> getActivities() {
+    public ResponseEntity<ActivitiesResponse> getActivities(
+            @RequestParam(value = "category", required = false) List<Integer> categories) {
         Users user = getCurrentUser();
-        return ResponseEntity.ok(portfolioService.getActivities(user));
+        return ResponseEntity.ok(portfolioService.getActivities(user, categories));
     }
 
     /**
