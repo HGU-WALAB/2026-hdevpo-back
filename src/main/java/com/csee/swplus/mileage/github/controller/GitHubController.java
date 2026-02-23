@@ -30,13 +30,13 @@ public class GitHubController {
 
     @Value("${github.client-id}")
     private String clientId;
-
+    
     @Value("${github.redirect-uri}")
     private String redirectUri;
-
+    
     @Value("${app.frontend-url}")
     private String frontendUrl;
-
+    
     @Value("${custom.jwt.secret}")
     private String jwtSecret;
 
@@ -47,12 +47,12 @@ public class GitHubController {
     @GetMapping("/connect")
     public void connect(HttpServletResponse response) throws IOException {
         log.info("🔗 GitHub OAuth connect requested");
-
+        
         String url = "https://github.com/login/oauth/authorize"
                 + "?client_id=" + clientId
                 + "&redirect_uri=" + redirectUri
                 + "&scope=read:user,repo";
-
+        
         log.info("   Redirecting to GitHub: {}", url);
         response.sendRedirect(url);
     }
@@ -63,41 +63,41 @@ public class GitHubController {
      */
     @GetMapping("/callback")
     public void callback(@RequestParam(required = false) String code,
-            @RequestParam(required = false) String error,
-            HttpServletRequest request,
-            HttpServletResponse response) throws IOException {
+                         @RequestParam(required = false) String error,
+                         HttpServletRequest request,
+                         HttpServletResponse response) throws IOException {
         log.info("═══════════════════════════════════════════════════════════");
         log.info("🔄 GitHub OAuth Callback");
         log.info("═══════════════════════════════════════════════════════════");
-
-        // Manually check for JWT token in cookies (since callback is excluded from
-        // filter)
+        
+        // Manually check for JWT token in cookies (since callback is excluded from filter)
         String accessToken = extractAccessTokenFromCookies(request);
         if (accessToken == null) {
             log.error("❌ No access token found in cookies. User must be logged in.");
             response.sendRedirect("http://walab.handong.edu/milestone25/login");
             return;
         }
-
+        
         // Validate token and set authentication context
         try {
             Key signingKey = JwtUtil.getSigningKey(jwtSecret);
             String userId = JwtUtil.getUserId(accessToken, signingKey);
             log.info("   Authenticated user ID: {}", userId);
             // Set authentication in context for service to use
-            org.springframework.security.authentication.UsernamePasswordAuthenticationToken authToken = new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
-                    userId, null, null);
+            org.springframework.security.authentication.UsernamePasswordAuthenticationToken authToken =
+                    new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(userId, null, null);
             SecurityContextHolder.getContext().setAuthentication(authToken);
         } catch (Exception e) {
             log.error("❌ Invalid or expired token: {}", e.getMessage());
             response.sendRedirect("http://walab.handong.edu/milestone25/login");
             return;
         }
-
+        
         if (error != null) {
             log.error("❌ GitHub OAuth error: {}", error);
-            // Redirect to MyPage with error parameter (frontend can show error message)
-            response.sendRedirect("http://walab.handong.edu/milestone25/my?github_error=" + error);
+            // Whitelist error param to avoid open redirect or XSS (GitHub sends: access_denied, etc.)
+            String safeError = (error.length() > 64 || !error.matches("[a-zA-Z0-9_]+")) ? "oauth_error" : error;
+            response.sendRedirect("http://walab.handong.edu/milestone25/my?github_error=" + safeError);
             return;
         }
 
@@ -106,19 +106,26 @@ public class GitHubController {
             response.sendRedirect("http://walab.handong.edu/milestone25/my?github_error=no_code");
             return;
         }
+        // Reject oversized or suspicious code (GitHub codes are typically short)
+        String trimmedCode = code.trim();
+        if (trimmedCode.length() > 500) {
+            log.error("❌ GitHub authorization code too long (possible abuse)");
+            response.sendRedirect("http://walab.handong.edu/milestone25/my?github_error=invalid_code");
+            return;
+        }
 
         try {
-            log.info("   Processing callback with code: {}...", code.substring(0, Math.min(10, code.length())));
-            oauthService.handleCallback(code);
-
+            log.info("   Processing callback with code: {}...", trimmedCode.substring(0, Math.min(10, trimmedCode.length())));
+            oauthService.handleCallback(trimmedCode);
+            
             log.info("✅ GitHub connection successful");
             log.info("═══════════════════════════════════════════════════════════");
-
+            
             // Redirect to MyPage: http://walab.handong.edu/milestone25/my
             String myPageUrl = "http://walab.handong.edu/milestone25/my";
             log.info("   Redirecting to MyPage: {}", myPageUrl);
             response.sendRedirect(myPageUrl);
-
+            
         } catch (Exception e) {
             log.error("❌ Error processing GitHub callback: {}", e.getMessage(), e);
             // Redirect to MyPage with error parameter
@@ -146,11 +153,11 @@ public class GitHubController {
     public ResponseEntity<GitHubStatusResponse> status() {
         log.debug("📊 GitHub status check requested");
         GitHubStatusResponse response = oauthService.checkStatus();
-        log.debug("   Status - Connected: {}, Username: {}",
+        log.debug("   Status - Connected: {}, Username: {}", 
                 response.isConnected(), response.getGithubUsername());
         return ResponseEntity.ok(response);
     }
-
+    
     private String extractAccessTokenFromCookies(HttpServletRequest request) {
         Cookie[] cookies = request.getCookies();
         if (cookies != null) {
