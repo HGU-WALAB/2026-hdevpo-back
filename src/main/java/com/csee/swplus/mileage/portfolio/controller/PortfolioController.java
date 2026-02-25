@@ -186,12 +186,15 @@ public class PortfolioController {
     }
 
     /**
-     * GET /api/portfolio/repositories – 노출 토글 + 커스텀 제목 목록.
+     * GET /api/portfolio/repositories – GitHub 레포 목록 + (선택된 레포에 한해) 커스텀 설정 정보.
+     * Optional pagination: ?page=1&per_page=30 (defaults: page=1, per_page=30; max per_page=100).
      */
     @GetMapping("/repositories")
-    public ResponseEntity<RepositoriesResponse> getRepositories() {
+    public ResponseEntity<RepositoriesResponse> getRepositories(
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "per_page", required = false) Integer perPage) {
         Users user = getCurrentUser();
-        return ResponseEntity.ok(portfolioService.getRepositories(user));
+        return ResponseEntity.ok(portfolioService.getRepositories(user, page, perPage));
     }
 
     /**

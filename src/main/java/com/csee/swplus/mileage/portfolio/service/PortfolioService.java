@@ -124,8 +124,23 @@ public class PortfolioService {
 
     /**
      * GET /api/portfolio/repositories – GitHub 레포 목록 + (선택된 레포에 한해) 커스텀 설정 정보.
+     * Overload without pagination: defaults to page 1, per_page 100 (for internal callers like PUT).
      */
     public RepositoriesResponse getRepositories(Users user) {
+        return getRepositories(user, 1, 100);
+    }
+
+    /**
+     * GET /api/portfolio/repositories – GitHub 레포 목록 + (선택된 레포에 한해) 커스텀 설정 정보.
+     * Supports simple pagination via ?page=&per_page= (mirrors GitHub API).
+     */
+    public RepositoriesResponse getRepositories(Users user, Integer page, Integer perPage) {
+        int p = (page == null || page < 1) ? 1 : page;
+        int limit = (perPage == null || perPage < 1) ? 30 : perPage;
+        if (limit > 100) {
+            limit = 100;
+        }
+
         Portfolio portfolio = getOrCreatePortfolio(user);
         java.util.List<PortfolioRepoEntry> entries =
                 portfolioRepoEntryRepository.findByPortfolio_IdOrderByDisplayOrderAsc(portfolio.getId());
@@ -152,8 +167,8 @@ public class PortfolioService {
                         .queryParam("type", "owner")
                         .queryParam("sort", "updated")
                         .queryParam("direction", "desc")
-                        .queryParam("per_page", 100)
-                        .queryParam("page", 1)
+                        .queryParam("per_page", limit)
+                        .queryParam("page", p)
                         .toUriString();
 
                 @SuppressWarnings("unchecked")
