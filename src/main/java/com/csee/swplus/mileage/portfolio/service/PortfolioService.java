@@ -125,17 +125,18 @@ public class PortfolioService {
 
     /**
      * GET /api/portfolio/repositories – GitHub 레포 목록 + (선택된 레포에 한해) 커스텀 설정 정보.
-     * Overload without pagination: defaults to page 1, per_page 100 (for internal callers like PUT).
+     * Overload for internal callers (PUT, etc.): no filters.
      */
     public RepositoriesResponse getRepositories(Users user) {
-        return getRepositories(user, 1, 100);
+        return getRepositories(user, 1, 100, null, null);
     }
 
     /**
      * GET /api/portfolio/repositories – GitHub 레포 목록 + (선택된 레포에 한해) 커스텀 설정 정보.
-     * Supports simple pagination via ?page=&per_page= (mirrors GitHub API).
+     * Pagination: ?page=&per_page=. Filters: ?selected_only=true (only added), ?visible_only=true (added + visible).
      */
-    public RepositoriesResponse getRepositories(Users user, Integer page, Integer perPage) {
+    public RepositoriesResponse getRepositories(Users user, Integer page, Integer perPage,
+            Boolean selectedOnly, Boolean visibleOnly) {
         int p = (page == null || page < 1) ? 1 : page;
         int limit = (perPage == null || perPage < 1) ? 30 : perPage;
         if (limit > 100) {
@@ -235,6 +236,13 @@ public class PortfolioService {
                         .display_order(e.getDisplayOrder())
                         .build());
             }
+        }
+
+        // Optional filters: selected_only (id != null) or visible_only (id != null && is_visible)
+        if (Boolean.TRUE.equals(visibleOnly)) {
+            list.removeIf(r -> r.getId() == null || !Boolean.TRUE.equals(r.getIs_visible()));
+        } else if (Boolean.TRUE.equals(selectedOnly)) {
+            list.removeIf(r -> r.getId() == null);
         }
 
         return RepositoriesResponse.builder().repositories(list).build();

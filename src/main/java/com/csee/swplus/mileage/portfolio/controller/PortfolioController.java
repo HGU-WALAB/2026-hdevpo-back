@@ -189,14 +189,16 @@ public class PortfolioController {
 
     /**
      * GET /api/portfolio/repositories – GitHub 레포 목록 + (선택된 레포에 한해) 커스텀 설정 정보.
-     * Optional pagination: ?page=1&per_page=30 (defaults: page=1, per_page=30; max per_page=100).
+     * Optional: ?page=1&per_page=30 | ?selected_only=true (only added) | ?visible_only=true (only added + visible).
      */
     @GetMapping("/repositories")
     public ResponseEntity<RepositoriesResponse> getRepositories(
             @RequestParam(value = "page", required = false) Integer page,
-            @RequestParam(value = "per_page", required = false) Integer perPage) {
+            @RequestParam(value = "per_page", required = false) Integer perPage,
+            @RequestParam(value = "selected_only", required = false) Boolean selectedOnly,
+            @RequestParam(value = "visible_only", required = false) Boolean visibleOnly) {
         Users user = getCurrentUser();
-        return ResponseEntity.ok(portfolioService.getRepositories(user, page, perPage));
+        return ResponseEntity.ok(portfolioService.getRepositories(user, page, perPage, selectedOnly, visibleOnly));
     }
 
     /**
