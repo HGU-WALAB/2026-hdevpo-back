@@ -25,6 +25,7 @@ import com.csee.swplus.mileage.portfolio.repository.PortfolioActivityRepository;
 import com.csee.swplus.mileage.portfolio.repository.PortfolioMileageEntryRepository;
 import com.csee.swplus.mileage.portfolio.repository.PortfolioRepository;
 import com.csee.swplus.mileage.portfolio.repository.PortfolioRepoEntryRepository;
+import com.csee.swplus.mileage.github.util.TokenEncryptionUtil;
 import com.csee.swplus.mileage.profile.entity.Profile;
 import com.csee.swplus.mileage.profile.repository.ProfileRepository;
 import com.csee.swplus.mileage.subitem.dto.SubitemNamesDto;
@@ -33,6 +34,11 @@ import com.csee.swplus.mileage.user.entity.Users;
 import com.csee.swplus.mileage.auth.exception.DoNotExistException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
@@ -58,6 +64,9 @@ public class PortfolioService {
 
     @Value("${github.api-base-url}")
     private String githubApiBaseUrl;
+
+    @Value("${github.token-encryption-key:}")
+    private String tokenEncryptionKey;
 
     /**
      * Returns the portfolio for the user, creating one if it does not exist.
@@ -128,15 +137,24 @@ public class PortfolioService {
      * Overload for internal callers (PUT, etc.): no filters.
      */
     public RepositoriesResponse getRepositories(Users user) {
-        return getRepositories(user, 1, 100, null, null);
+        return getRepositories(user, 1, 100, null, null, null, null, null);
     }
 
     /**
      * GET /api/portfolio/repositories – GitHub 레포 목록 + (선택된 레포에 한해) 커스텀 설정 정보.
-     * Pagination: ?page=&per_page=. Filters: ?selected_only=true (only added), ?visible_only=true (added + visible).
+     * Pagination: ?page=&per_page=. Filters: ?selected_only=, ?visible_only=, ?sort=, ?visibility=, ?affiliation=.
      */
     public RepositoriesResponse getRepositories(Users user, Integer page, Integer perPage,
             Boolean selectedOnly, Boolean visibleOnly) {
+        return getRepositories(user, page, perPage, selectedOnly, visibleOnly, null, null, null);
+    }
+
+    /**
+     * Full getRepositories with sort, visibility, affiliation. When token exists, uses GET /user/repos
+     * (private + org repos). Otherwise falls back to public GET /users/{username}/repos.
+     */
+    public RepositoriesResponse getRepositories(Users user, Integer page, Integer perPage,
+            Boolean selectedOnly, Boolean visibleOnly, String sort, String visibility, String affiliation) {
         int p = (page == null || page < 1) ? 1 : page;
         int limit = (perPage == null || perPage < 1) ? 30 : perPage;
         if (limit > 100) {
@@ -153,28 +171,57 @@ public class PortfolioService {
             byRepoId.put(e.getRepoId(), e);
         }
 
-        // Find GitHub username from Profile (set by GitHub OAuth)
+        // Find GitHub username and optionally decrypted token from Profile
         String githubUsername = null;
+        String githubToken = null;
         Profile profile = profileRepository.findBySnum(user.getUniqueId()).orElse(null);
         if (profile != null) {
             githubUsername = profile.getGithubUsername();
+            if (tokenEncryptionKey != null && !tokenEncryptionKey.isEmpty()
+                    && profile.getGithubAccessToken() != null && !profile.getGithubAccessToken().isEmpty()) {
+                githubToken = TokenEncryptionUtil.decrypt(profile.getGithubAccessToken(), tokenEncryptionKey);
+            }
         }
+
+        // Validate sort, visibility, affiliation for GitHub API
+        String sortParam = (sort != null && sort.matches("created|updated|pushed|full_name")) ? sort : "updated";
+        String visibilityParam = (visibility != null && visibility.matches("all|public|private")) ? visibility : "all";
+        String affiliationParam = (affiliation != null && !affiliation.isEmpty()) ? affiliation : "owner,collaborator,organization_member";
 
         java.util.List<RepoEntryResponse> list = new java.util.ArrayList<>();
 
         if (githubUsername != null && !githubUsername.isEmpty()) {
             try {
-                String url = UriComponentsBuilder
-                        .fromHttpUrl(githubApiBaseUrl + "/users/" + githubUsername + "/repos")
-                        .queryParam("type", "owner")
-                        .queryParam("sort", "updated")
-                        .queryParam("direction", "desc")
-                        .queryParam("per_page", limit)
-                        .queryParam("page", p)
-                        .toUriString();
-
-                @SuppressWarnings("unchecked")
-                Map<String, Object>[] repos = restTemplate.getForObject(url, Map[].class);
+                Map<String, Object>[] repos = null;
+                if (githubToken != null) {
+                    // Authenticated: GET /user/repos – includes private + org repos
+                    String url = UriComponentsBuilder
+                            .fromHttpUrl(githubApiBaseUrl + "/user/repos")
+                            .queryParam("sort", sortParam)
+                            .queryParam("direction", "desc")
+                            .queryParam("per_page", limit)
+                            .queryParam("page", p)
+                            .queryParam("visibility", visibilityParam)
+                            .queryParam("affiliation", affiliationParam)
+                            .toUriString();
+                    HttpHeaders headers = new HttpHeaders();
+                    headers.setBearerAuth(githubToken);
+                    headers.setAccept(java.util.Arrays.asList(MediaType.APPLICATION_JSON));
+                    HttpEntity<Void> req = new HttpEntity<>(headers);
+                    ResponseEntity<Map[]> res = restTemplate.exchange(url, HttpMethod.GET, req, Map[].class);
+                    repos = res.getBody();
+                } else {
+                    // Unauthenticated: GET /users/{username}/repos – public owner repos only
+                    String url = UriComponentsBuilder
+                            .fromHttpUrl(githubApiBaseUrl + "/users/" + githubUsername + "/repos")
+                            .queryParam("type", "owner")
+                            .queryParam("sort", sortParam)
+                            .queryParam("direction", "desc")
+                            .queryParam("per_page", limit)
+                            .queryParam("page", p)
+                            .toUriString();
+                    repos = restTemplate.getForObject(url, Map[].class);
+                }
 
                 if (repos != null) {
                     for (Map<String, Object> repo : repos) {
@@ -193,21 +240,28 @@ public class PortfolioService {
                         Object u = repo.get("updated_at");
                         String createdAt = c != null ? c.toString() : null;
                         String updatedAt = u != null ? u.toString() : null;
+                        Boolean isPrivate = (Boolean) repo.get("private");
+                        String vis = isPrivate != null && isPrivate ? "private" : "public";
+                        String ownerLogin = null;
+                        Object ownerObj = repo.get("owner");
+                        if (ownerObj instanceof Map) {
+                            ownerLogin = (String) ((Map<?, ?>) ownerObj).get("login");
+                        }
 
                         list.add(RepoEntryResponse.builder()
-                                // Our service metadata (only if selected)
                                 .id(selected != null ? selected.getId() : null)
                                 .repo_id(repoId)
                                 .custom_title(selected != null ? selected.getCustomTitle() : null)
                                 .description(selected != null ? selected.getDescription() : null)
                                 .is_visible(selected != null ? selected.getIsVisible() : false)
                                 .display_order(selected != null ? selected.getDisplayOrder() : 0)
-                                // GitHub live data
                                 .name(name)
                                 .html_url(htmlUrl)
                                 .language(language)
                                 .created_at(createdAt)
                                 .updated_at(updatedAt)
+                                .visibility(vis)
+                                .owner(ownerLogin)
                                 .build());
                     }
                 }

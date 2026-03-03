@@ -50,4 +50,8 @@ public class Profile {
     
     @Column(name = "github_connected_at")
     private LocalDateTime githubConnectedAt;
+
+    /** AES-256-GCM encrypted GitHub OAuth access token. Never expose via API. */
+    @Column(name = "github_access_token", length = 512)
+    private String githubAccessToken;
 }

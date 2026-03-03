@@ -1,6 +1,7 @@
 package com.csee.swplus.mileage.github.service;
 
 import com.csee.swplus.mileage.github.dto.GitHubStatusResponse;
+import com.csee.swplus.mileage.github.util.TokenEncryptionUtil;
 import com.csee.swplus.mileage.profile.entity.Profile;
 import com.csee.swplus.mileage.profile.repository.ProfileRepository;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +32,9 @@ public class GitHubOAuthService {
     
     @Value("${github.api-base-url}")
     private String apiBaseUrl;
+
+    @Value("${github.token-encryption-key:}")
+    private String tokenEncryptionKey;
 
     private final ProfileRepository profileRepository;
     private final RestTemplate restTemplate;
@@ -96,6 +100,18 @@ public class GitHubOAuthService {
             if (profile.getGithubLink() == null || profile.getGithubLink().isEmpty()) {
                 profile.setGithubLink("https://github.com/" + githubUsername);
             }
+            // Store encrypted token for fetching private/org repos (only if encryption key is configured)
+            if (tokenEncryptionKey != null && !tokenEncryptionKey.isEmpty()) {
+                String encrypted = TokenEncryptionUtil.encrypt(accessToken, tokenEncryptionKey);
+                if (encrypted != null) {
+                    profile.setGithubAccessToken(encrypted);
+                    log.info("   ✅ GitHub access token stored (encrypted)");
+                } else {
+                    log.warn("   ⚠ Token encryption failed; private/org repos will not be available");
+                }
+            } else {
+                log.warn("   ⚠ GITHUB_TOKEN_ENCRYPTION_KEY not set; token not stored. Private/org repos unavailable.");
+            }
 
             profileRepository.save(profile);
             log.info("   ✅ GitHub connection saved successfully");
@@ -159,6 +175,7 @@ public class GitHubOAuthService {
         profile.setGithubId(null);
         profile.setGithubUsername(null);
         profile.setGithubConnectedAt(null);
+        profile.setGithubAccessToken(null);
         // Clear github_link only if it was set by OAuth (optional: you can leave it if user entered manually)
         if (profile.getGithubLink() != null && profile.getGithubLink().startsWith("https://github.com/")) {
             profile.setGithubLink(null);

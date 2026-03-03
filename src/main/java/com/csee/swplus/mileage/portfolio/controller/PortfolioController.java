@@ -191,16 +191,21 @@ public class PortfolioController {
 
     /**
      * GET /api/portfolio/repositories – GitHub 레포 목록 + (선택된 레포에 한해) 커스텀 설정 정보.
-     * Optional: ?page=1&per_page=30 | ?selected_only=true (only added) | ?visible_only=true (only added + visible).
+     * Optional: ?page=1&per_page=30 | ?selected_only=true | ?visible_only=true |
+     * ?sort=updated|created|pushed|full_name | ?visibility=all|public|private |
+     * ?affiliation=owner,collaborator,organization_member (requires stored token for private/org).
      */
     @GetMapping("/repositories")
     public ResponseEntity<RepositoriesResponse> getRepositories(
             @RequestParam(value = "page", required = false) Integer page,
             @RequestParam(value = "per_page", required = false) Integer perPage,
             @RequestParam(value = "selected_only", required = false) Boolean selectedOnly,
-            @RequestParam(value = "visible_only", required = false) Boolean visibleOnly) {
+            @RequestParam(value = "visible_only", required = false) Boolean visibleOnly,
+            @RequestParam(value = "sort", required = false) String sort,
+            @RequestParam(value = "visibility", required = false) String visibility,
+            @RequestParam(value = "affiliation", required = false) String affiliation) {
         Users user = getCurrentUser();
-        return ResponseEntity.ok(portfolioService.getRepositories(user, page, perPage, selectedOnly, visibleOnly));
+        return ResponseEntity.ok(portfolioService.getRepositories(user, page, perPage, selectedOnly, visibleOnly, sort, visibility, affiliation));
     }
 
     /**

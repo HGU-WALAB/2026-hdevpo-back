@@ -27,4 +27,8 @@ public class RepoEntryResponse {
     private String language;
     private String created_at;
     private String updated_at;
+    /** public or private */
+    private String visibility;
+    /** Owner login (user or org) */
+    private String owner;
 }
