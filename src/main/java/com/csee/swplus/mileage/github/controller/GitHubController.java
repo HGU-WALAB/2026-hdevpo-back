@@ -51,7 +51,7 @@ public class GitHubController {
         String url = "https://github.com/login/oauth/authorize"
                 + "?client_id=" + clientId
                 + "&redirect_uri=" + redirectUri
-                + "&scope=read:user,repo";
+                + "&scope=read:user,repo,read:org";
         
         log.info("   Redirecting to GitHub: {}", url);
         response.sendRedirect(url);
