@@ -64,18 +64,29 @@ public class ManagerService {
     }
 
     /**
-     * Returns global maintenance flag from manager setting (id=2).
-     * Uses SwManagerSetting so it only depends on maintenance_mode column.
-     * If anything fails or column is null, returns false (no maintenance).
+     * Returns global maintenance flag from latest manager setting row.
+     * Active only when:
+     * - maintenance_mode = 1 AND
+     * - now is between read_start and read_end.
      */
     public boolean isMaintenanceMode() {
         try {
             return swManagerSettingRepository.findFirstByOrderByIdDesc()
-                    .map(SwManagerSetting::getMaintenanceMode)
-                    .map(v -> v != null && v == 1)
+                    .map(setting -> {
+                        Integer flag = setting.getMaintenanceMode();
+                        if (flag == null || flag != 1) {
+                            return false;
+                        }
+                        if (setting.getReadStart() == null || setting.getReadEnd() == null) {
+                            return false;
+                        }
+                        java.time.LocalDateTime now = java.time.LocalDateTime.now();
+                        return !now.isBefore(setting.getReadStart())
+                                && !now.isAfter(setting.getReadEnd());
+                    })
                     .orElse(false);
         } catch (Exception e) {
-            log.warn("Could not load maintenance_mode (column may not exist): {}", e.getMessage());
+            log.warn("Could not load maintenance fields (mode/read_start/read_end): {}", e.getMessage());
             return false;
         }
     }
