@@ -64,18 +64,33 @@ public class ManagerService {
     }
 
     /**
-     * Returns global maintenance flag from manager setting (id=2).
-     * Uses SwManagerSetting so it only depends on maintenance_mode column.
-     * If anything fails or column is null, returns false (no maintenance).
+     * 전역 점검 모드 여부를 반환한다.
+     *
+     * - 기준 행: 가장 최근(_sw_manager_setting) 설정 행 (id DESC 1건)
+     * - 점검 ON 조건:
+     *     1) maintenance_mode = 1
+     *     2) 현재 시간이 read_start ~ read_end 범위 안에 있는 경우
+     *
+     * 위 조건 중 하나라도 만족하지 않으면 false 를 반환한다.
      */
     public boolean isMaintenanceMode() {
         try {
             return swManagerSettingRepository.findFirstByOrderByIdDesc()
-                    .map(SwManagerSetting::getMaintenanceMode)
-                    .map(v -> v != null && v == 1)
+                    .map(setting -> {
+                        Integer flag = setting.getMaintenanceMode();
+                        if (flag == null || flag != 1) {
+                            return false;
+                        }
+                        if (setting.getReadStart() == null || setting.getReadEnd() == null) {
+                            return false;
+                        }
+                        java.time.LocalDateTime now = java.time.LocalDateTime.now();
+                        return !now.isBefore(setting.getReadStart())
+                                && !now.isAfter(setting.getReadEnd());
+                    })
                     .orElse(false);
         } catch (Exception e) {
-            log.warn("Could not load maintenance_mode (column may not exist): {}", e.getMessage());
+            log.warn("Could not load maintenance fields (mode/read_start/read_end): {}", e.getMessage());
             return false;
         }
     }
