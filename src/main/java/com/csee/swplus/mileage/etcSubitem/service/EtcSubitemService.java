@@ -29,6 +29,24 @@ public class EtcSubitemService {
     private final EtcSubitemFileService fileService;
     private final ManagerService managerService;
 
+    /**
+     * Returns the file metadata if the current user is authorized to download it.
+     * Verifies file exists in DB and belongs to a record owned by the user.
+     */
+    public java.util.Optional<EtcSubitemFile> getFileIfAuthorized(String filename, String currentUserId) {
+        if (filename == null || filename.isEmpty() || filename.contains("..") || filename.contains("/") || filename.contains("\\")) {
+            return java.util.Optional.empty();
+        }
+        List<EtcSubitemFile> files = fileRepository.findByFilename(filename);
+        for (EtcSubitemFile f : files) {
+            EtcSubitem record = etcSubitemRepository.findById(f.getRecordId()).orElse(null);
+            if (record != null && currentUserId.equals(record.getSnum())) {
+                return java.util.Optional.of(f);
+            }
+        }
+        return java.util.Optional.empty();
+    }
+
     public List<StudentInputSubitemResponseDto> getStudentInputSubitems() {
         String currentSemester = managerService.getCurrentSemester();
         log.info("📝 getCurrentSemester 결과 - current semester: " + currentSemester);

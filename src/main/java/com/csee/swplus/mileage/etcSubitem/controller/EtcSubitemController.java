@@ -16,9 +16,12 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.http.MediaType;
 import org.springframework.core.io.Resource;
 
+import com.csee.swplus.mileage.etcSubitem.file.EtcSubitemFile;
+
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
@@ -49,26 +52,39 @@ public class EtcSubitemController {
     @Value("${file.dir}")
     private String FILE_DIRECTORY;
 
-    //    특정 기타 항목의 증빙 자료 다운로드
+    //    특정 기타 항목의 증빙 자료 다운로드 (path traversal 및 IDOR 방지)
     @GetMapping("/file/{uniqueFileName}")
-    public ResponseEntity<?> getEtcSubitemFile (@PathVariable String uniqueFileName) throws IOException {
-        log.info("📂 Requested File: {}", uniqueFileName);
+    public ResponseEntity<?> getEtcSubitemFile(@PathVariable String uniqueFileName) throws IOException {
+        String currentUserId = SecurityContextHolder.getContext().getAuthentication().getName();
 
-        Path path = Paths.get(FILE_DIRECTORY + uniqueFileName);
-        log.info("🔍 Full File Path: {}", path.toString());
-
-        Resource resource = new UrlResource(path.toUri());
-
-        if (!resource.exists() || !resource.isReadable()) {
-            log.error("❌ File not found or not readable: {}", path.toString());
+        // 1. Authorization: only allow download of files owned by the current user
+        Optional<EtcSubitemFile> fileOpt = etcSubitemService.getFileIfAuthorized(uniqueFileName, currentUserId);
+        if (fileOpt.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
 
-        log.info("✅ File found: {}", path.toString());
+        // 2. Path traversal guard: ensure resolved path stays within upload directory
+        Path baseDir = Paths.get(FILE_DIRECTORY).toAbsolutePath().normalize();
+        Path resolved = baseDir.resolve(uniqueFileName).normalize();
+        if (!resolved.startsWith(baseDir)) {
+            return ResponseEntity.notFound().build();
+        }
+
+        Resource resource = new UrlResource(resolved.toUri());
+        if (!resource.exists() || !resource.isReadable()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        // 3. Safe Content-Disposition: sanitize filename to prevent header injection
+        String dispName = fileOpt.get().getOriginalFilename();
+        if (dispName == null || dispName.contains("\"") || dispName.contains("\r") || dispName.contains("\n")) {
+            dispName = uniqueFileName;
+        }
+        dispName = dispName.replaceAll("[\"\\r\\n]", "_");
 
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + uniqueFileName + "\"")
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + dispName + "\"")
                 .body(resource);
     }
 
