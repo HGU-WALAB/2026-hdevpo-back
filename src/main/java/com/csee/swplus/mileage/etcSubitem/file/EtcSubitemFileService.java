@@ -25,47 +25,57 @@ public class EtcSubitemFileService {
     @Getter
     private String uploadDir;
 
+    private static final String ALLOWED_EXTENSION = "pdf";
+
+    /**
+     * Saves file with a safe UUID-based filename to prevent path traversal on write.
+     * Only .pdf is allowed. Never uses user-supplied filename for storage path.
+     */
     public String saveFile(MultipartFile file) throws IOException {
-//        1. 업로드 디렉토리 생성
+        String originalFilename = file.getOriginalFilename();
+        if (originalFilename == null || originalFilename.isEmpty()) {
+            throw new IllegalArgumentException("Filename is required");
+        }
+        String ext = "";
+        if (originalFilename.contains(".")) {
+            ext = originalFilename.substring(originalFilename.lastIndexOf(".") + 1).toLowerCase();
+        }
+        if (!ALLOWED_EXTENSION.equals(ext)) {
+            throw new IllegalArgumentException("Only .pdf files are allowed");
+        }
+
         File directory = new File(uploadDir);
         if (!directory.exists()) {
-//            mkdir 와의 차이: mkdirs 는 만들고자 하는 디렉토리의 상위 디렉토리가 존재하지 않을 경우 상위 디렉토리까지 생성
             directory.mkdirs();
         }
 
-//        2. 파일명 중복 방지를 위한 고유 파일명 생성 X -> 파일명 저장 형식 전달 받음
-        String originalFilename = file.getOriginalFilename();
-//        String extension = originalFilename.substring(originalFilename.lastIndexOf(".")); // 파일 확장자 추출
-//        String savedFilename = UUID.randomUUID().toString() + extension; // 고유한 파일명 생성 후 원본 확장자를 붙여 새로운 파일명 생성
+        String safeFilename = UUID.randomUUID().toString() + "." + ALLOWED_EXTENSION;
+        Path baseDir = Paths.get(uploadDir).toAbsolutePath().normalize();
+        Path targetLocation = baseDir.resolve(safeFilename).normalize();
+        if (!targetLocation.startsWith(baseDir)) {
+            throw new SecurityException("Path traversal attempt blocked");
+        }
 
-//        3. 파일 저장
-//        uploadDir 경로를 Path 객체로 변환
-//        새 파일명과 결합하여 최종 저장 위치를 설정
-        Path targetLocation = Paths.get(uploadDir).resolve(originalFilename);
-
-//        file.getInputStream() 을 사용하여 업로드된 파일의 데이터를 읽음
-//        targetLocation 경로에 복사
         try (InputStream inputStream = file.getInputStream()) {
             Files.copy(inputStream, targetLocation);
         }
 
-//        try {
-//            Set<PosixFilePermission> perms = PosixFilePermissions.fromString("rw-r—r—");
-//            Files.setPosixFilePermissions(targetLocation, perms);
-//        } catch (UnsupportedOperationException e) {
-//            // Windows에서는 권한 변경을 무시하고 진행
-//        }
-
-//        4. 저장된 파일명 (새로 만들어진 고유의 파일명) 반환
-        return originalFilename;
+        return safeFilename;
     }
 
     public void deleteFile(String filename) {
+        if (filename == null || filename.isEmpty() || filename.contains("..") || filename.contains("/") || filename.contains("\\")) {
+            throw new IllegalArgumentException("Invalid filename");
+        }
         try {
-            Path filePath = Paths.get(uploadDir).resolve(filename);
+            Path baseDir = Paths.get(uploadDir).toAbsolutePath().normalize();
+            Path filePath = baseDir.resolve(filename).normalize();
+            if (!filePath.startsWith(baseDir)) {
+                throw new SecurityException("Path traversal attempt blocked");
+            }
             Files.deleteIfExists(filePath);
         } catch (IOException e) {
-            log.error("파일 삭제 중 오류 발생: " + filename, e);
+            log.error("파일 삭제 중 오류 발생: {}", filename, e);
             throw new RuntimeException("파일 삭제 중 오류가 발생했습니다.");
         }
     }
