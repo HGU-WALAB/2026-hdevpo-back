@@ -73,8 +73,10 @@ public class ManagerService {
      */
     public boolean isMaintenanceMode() {
         try {
-            return managerRepository.isMaintenanceActive()
-                    .orElse(false);
+            java.util.Optional<Boolean> active = managerRepository.isMaintenanceActive();
+            boolean result = active.orElse(false);
+            log.info("maintenanceActiveFromDB={}, resolvedMaintenanceMode={}", active, result);
+            return result;
         } catch (Exception e) {
             log.warn("Could not load maintenance active state: {}", e.getMessage());
             return false;

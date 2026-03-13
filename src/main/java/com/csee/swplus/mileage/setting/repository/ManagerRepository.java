@@ -61,7 +61,7 @@ public interface ManagerRepository extends JpaRepository<Manager, Long> {
      * ON when:
      * - maintenance_mode = 1 AND
      * - (read_start/read_end are NULL OR NOW() is between them)
-     * Uses latest row (id DESC).
+     * Uses fixed settings row id = 2.
      */
     @Query(
         value = "SELECT CASE " +
@@ -71,8 +71,7 @@ public interface ManagerRepository extends JpaRepository<Manager, Long> {
                 "         THEN TRUE ELSE FALSE " +
                 "       END " +
                 "FROM _sw_manager_setting " +
-                "ORDER BY id DESC " +
-                "LIMIT 1",
+                "WHERE id = 2",
         nativeQuery = true
     )
     Optional<Boolean> isMaintenanceActive();

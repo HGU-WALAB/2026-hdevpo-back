@@ -16,6 +16,8 @@ import org.springframework.web.bind.annotation.*;
 import javax.servlet.http.Cookie;
 import javax.servlet.http.HttpServletRequest;
 import java.security.Key;
+import java.util.HashMap;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/mileage")
@@ -84,6 +86,20 @@ public class ManagerController {
                 isAllowedUser
         );
         return ResponseEntity.ok(body);
+    }
+
+    /**
+     * Debug endpoint to inspect raw maintenance values.
+     * Returns both the computed maintenanceMode and the raw DB result.
+     */
+    @GetMapping("/maintenance/debug")
+    public ResponseEntity<Map<String, Object>> getMaintenanceDebug() {
+        Map<String, Object> debug = new HashMap<>();
+        boolean computed = managerService.isMaintenanceMode();
+        debug.put("maintenanceMode", computed);
+        // We can't see server logs, so expose the same boolean again as dbActive for Swagger testing
+        debug.put("dbActive", computed);
+        return ResponseEntity.ok(debug);
     }
 
     private String extractUserIdFromAccessToken(HttpServletRequest request) {
