@@ -54,4 +54,25 @@ public interface ManagerRepository extends JpaRepository<Manager, Long> {
      */
     @Query(value = "SELECT maintenance_allowed_ids FROM _sw_manager_setting WHERE id = :id", nativeQuery = true)
     Optional<String> findMaintenanceAllowedIdsById(@Param("id") long id);
+
+    /**
+     * Returns whether maintenance is active, decided entirely in DB.
+     *
+     * ON when:
+     * - maintenance_mode = 1 AND
+     * - (read_start/read_end are NULL OR NOW() is between them)
+     * Uses fixed settings row id = 2.
+     */
+    @Query(
+        value = "SELECT CASE " +
+                "         WHEN maintenance_mode = 1 " +
+                "              AND (read_start IS NULL OR read_end IS NULL " +
+                "                   OR NOW() BETWEEN read_start AND read_end) " +
+                "         THEN 1 ELSE 0 " +
+                "       END " +
+                "FROM _sw_manager_setting " +
+                "WHERE id = 2",
+        nativeQuery = true
+    )
+    Optional<Integer> isMaintenanceActive();
 }

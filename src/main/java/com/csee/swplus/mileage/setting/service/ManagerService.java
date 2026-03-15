@@ -66,31 +66,19 @@ public class ManagerService {
     /**
      * 전역 점검 모드 여부를 반환한다.
      *
-     * - 기준 행: 가장 최근(_sw_manager_setting) 설정 행 (id DESC 1건)
-     * - 점검 ON 조건:
-     *     1) maintenance_mode = 1
-     *     2) 현재 시간이 read_start ~ read_end 범위 안에 있는 경우
-     *
-     * 위 조건 중 하나라도 만족하지 않으면 false 를 반환한다.
+     * DB 쿼리에서 직접 판단:
+     * - maintenance_mode = 1 AND
+     * - (read_start/read_end 가 NULL 이거나, NOW() 가 그 사이에 있는 경우)
+     * 가장 최신 설정 행(id DESC 1건)을 기준으로 한다.
      */
     public boolean isMaintenanceMode() {
         try {
-            return swManagerSettingRepository.findFirstByOrderByIdDesc()
-                    .map(setting -> {
-                        Integer flag = setting.getMaintenanceMode();
-                        if (flag == null || flag != 1) {
-                            return false;
-                        }
-                        if (setting.getReadStart() == null || setting.getReadEnd() == null) {
-                            return false;
-                        }
-                        java.time.LocalDateTime now = java.time.LocalDateTime.now();
-                        return !now.isBefore(setting.getReadStart())
-                                && !now.isAfter(setting.getReadEnd());
-                    })
-                    .orElse(false);
+            java.util.Optional<Integer> active = managerRepository.isMaintenanceActive();
+            boolean result = active.map(v -> v != null && v != 0).orElse(false);
+            log.info("maintenanceActiveFromDB={}, resolvedMaintenanceMode={}", active, result);
+            return result;
         } catch (Exception e) {
-            log.warn("Could not load maintenance fields (mode/read_start/read_end): {}", e.getMessage());
+            log.warn("Could not load maintenance active state: {}", e.getMessage());
             return false;
         }
     }
