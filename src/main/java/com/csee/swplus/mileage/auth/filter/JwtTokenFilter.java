@@ -34,27 +34,21 @@ public class JwtTokenFilter extends OncePerRequestFilter {
 
     private static final List<String> EXCLUDED_PATHS = Arrays.asList(
             // Login/logout endpoints (with or without context path)
-            "/milestone25_1/api/mileage/auth/login$",
-            "/milestone25_1/api/mileage/auth/logout$",
+            "/mileage/api/mileage/auth/login$",
+            "/mileage/api/mileage/auth/logout$",
 
             // Public manager endpoints (contact, MyPage announcement, maintenance flag)
-            "/milestone25_1/api/mileage/contact$",
-            "/milestone25_1/api/mileage/announcement$",
-            "/milestone25_1/api/mileage/maintenance$",
+            "/mileage/api/mileage/contact$",
+            "/mileage/api/mileage/announcement$",
+            "/mileage/api/mileage/maintenance$",
             // GitHub OAuth callback (public - GitHub redirects here, but we check auth
             // manually)
             "/api/mileage/github/callback$",
-            "/milestone25_1/api/mileage/github/callback$",
-
-            // Swagger paths (with or without context path)
-            "^/swagger-ui",
-            "^/v3/api-docs",
-            "^/swagger-resources",
-            "^/webjars",
-            "^/milestone25_1/swagger-ui",
-            "^/milestone25_1/v3/api-docs",
-            "^/milestone25_1/swagger-resources",
-            "^/milestone25_1/webjars");
+            "/mileage/api/mileage/github/callback$",
+            // Stype test endpoint (no auth)
+            "/mileage/api/mileage/auth/stype-test",
+            // Actuator (health, metrics for ops)
+            "/mileage/actuator(/.*)?");
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
@@ -177,20 +171,14 @@ public class JwtTokenFilter extends OncePerRequestFilter {
             return true;
         }
 
-        // Fallback: check if URI contains Swagger-related paths (case-insensitive)
+        // Fallback: check for auth endpoints (more flexible matching)
         String lowerURI = requestURI.toLowerCase();
-        boolean isSwaggerPath = lowerURI.contains("/swagger-ui") ||
-                lowerURI.contains("/v3/api-docs") ||
-                lowerURI.contains("/swagger-resources") ||
-                lowerURI.contains("/webjars");
-
-        // Also check for login/logout and GitHub callback endpoints (more flexible
-        // matching)
         boolean isAuthEndpoint = lowerURI.contains("/api/mileage/auth/login") ||
                 lowerURI.contains("/api/mileage/auth/logout") ||
+                lowerURI.contains("/api/mileage/auth/stype-test") ||
                 lowerURI.contains("/api/mileage/github/callback");
 
-        if (isSwaggerPath || isAuthEndpoint) {
+        if (isAuthEndpoint) {
             log.debug("✅ Path matches excluded path (fallback check)");
             return true;
         }

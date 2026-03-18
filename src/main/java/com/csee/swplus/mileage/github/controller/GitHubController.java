@@ -74,7 +74,7 @@ public class GitHubController {
         String accessToken = extractAccessTokenFromCookies(request);
         if (accessToken == null) {
             log.error("❌ No access token found in cookies. User must be logged in.");
-            response.sendRedirect("http://walab.handong.edu/milestone25/login");
+            response.sendRedirect("http://walab.handong.edu/mileage/login");
             return;
         }
         
@@ -89,7 +89,7 @@ public class GitHubController {
             SecurityContextHolder.getContext().setAuthentication(authToken);
         } catch (Exception e) {
             log.error("❌ Invalid or expired token: {}", e.getMessage());
-            response.sendRedirect("http://walab.handong.edu/milestone25/login");
+            response.sendRedirect("http://walab.handong.edu/mileage/login");
             return;
         }
         
@@ -97,20 +97,20 @@ public class GitHubController {
             log.error("❌ GitHub OAuth error: {}", error);
             // Whitelist error param to avoid open redirect or XSS (GitHub sends: access_denied, etc.)
             String safeError = (error.length() > 64 || !error.matches("[a-zA-Z0-9_]+")) ? "oauth_error" : error;
-            response.sendRedirect("http://walab.handong.edu/milestone25/my?github_error=" + safeError);
+            response.sendRedirect("http://walab.handong.edu/mileage/my?github_error=" + safeError);
             return;
         }
 
         if (code == null || code.isEmpty()) {
             log.error("❌ No authorization code received from GitHub");
-            response.sendRedirect("http://walab.handong.edu/milestone25/my?github_error=no_code");
+            response.sendRedirect("http://walab.handong.edu/mileage/my?github_error=no_code");
             return;
         }
         // Reject oversized or suspicious code (GitHub codes are typically short)
         String trimmedCode = code.trim();
         if (trimmedCode.length() > 500) {
             log.error("❌ GitHub authorization code too long (possible abuse)");
-            response.sendRedirect("http://walab.handong.edu/milestone25/my?github_error=invalid_code");
+            response.sendRedirect("http://walab.handong.edu/mileage/my?github_error=invalid_code");
             return;
         }
 
@@ -122,14 +122,14 @@ public class GitHubController {
             log.info("═══════════════════════════════════════════════════════════");
             
             // Redirect to MyPage: http://walab.handong.edu/milestone25/my
-            String myPageUrl = "http://walab.handong.edu/milestone25/my";
+            String myPageUrl = "http://walab.handong.edu/mileage/my";
             log.info("   Redirecting to MyPage: {}", myPageUrl);
             response.sendRedirect(myPageUrl);
             
         } catch (Exception e) {
             log.error("❌ Error processing GitHub callback: {}", e.getMessage(), e);
             // Redirect to MyPage with error parameter
-            response.sendRedirect("http://walab.handong.edu/milestone25/my?github_error=connection_failed");
+            response.sendRedirect("http://walab.handong.edu/mileage/my?github_error=connection_failed");
         }
     }
 
