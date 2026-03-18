@@ -121,7 +121,7 @@ public class GitHubController {
             log.info("✅ GitHub connection successful");
             log.info("═══════════════════════════════════════════════════════════");
             
-            // Redirect to MyPage: http://walab.handong.edu/milestone25/my
+            // Redirect to MyPage: http://walab.handong.edu/mileage/my
             String myPageUrl = "http://walab.handong.edu/mileage/my";
             log.info("   Redirecting to MyPage: {}", myPageUrl);
             response.sendRedirect(myPageUrl);

@@ -2,6 +2,7 @@ package com.csee.swplus.mileage.auth.filter;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
@@ -20,7 +21,8 @@ import java.util.regex.Pattern;
  * Credentials should be set via env vars (never in committed config).
  */
 @Slf4j
-// Not @Component - using Spring Security httpBasic chain instead
+@Component
+@Order(Ordered.HIGHEST_PRECEDENCE)
 public class SwaggerBasicAuthFilter extends org.springframework.web.filter.OncePerRequestFilter {
 
     // Match with /mileage (context path) or without (some deployments/proxies)
