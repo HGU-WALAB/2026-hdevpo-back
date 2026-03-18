@@ -179,12 +179,13 @@ public class JwtTokenFilter extends OncePerRequestFilter {
             return true;
         }
 
-        // Fallback: check if URI contains Swagger-related paths (case-insensitive)
+        // Fallback: check if URI contains Swagger/Actuator paths (case-insensitive)
         String lowerURI = requestURI.toLowerCase();
         boolean isSwaggerPath = lowerURI.contains("/swagger-ui") ||
                 lowerURI.contains("/v3/api-docs") ||
                 lowerURI.contains("/swagger-resources") ||
-                lowerURI.contains("/webjars");
+                lowerURI.contains("/webjars") ||
+                lowerURI.contains("/actuator");
 
         // Also check for login/logout and GitHub callback endpoints (more flexible
         // matching)

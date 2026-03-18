@@ -23,9 +23,9 @@ import java.util.regex.Pattern;
 // Not @Component - using Spring Security httpBasic chain instead
 public class SwaggerBasicAuthFilter extends org.springframework.web.filter.OncePerRequestFilter {
 
-    // Match with /mileage (context path) or without (some deployments/proxies)
+    // Match with context path (/milestone25_1 or /mileage) or without
     private static final Pattern SWAGGER_PATH = Pattern.compile(
-            "^(/mileage)?/(swagger-ui(\\.html)?|swagger-ui/.*|v3/api-docs.*)$");
+            "^(/milestone25_1|/mileage)?/(swagger-ui(\\.html)?|swagger-ui/.*|v3/api-docs.*)$");
 
     @Value("${swagger.auth.user:}")
     private String expectedUser;

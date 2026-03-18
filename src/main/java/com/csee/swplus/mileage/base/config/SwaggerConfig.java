@@ -27,9 +27,12 @@ public class SwaggerConfig {
                                                                 .name("Mileage Team")
                                                                 .email("support@mileage.com")))
                                 .servers(Arrays.asList(
-                                                new Server().url("/milestone25_1").description("Production (relative)"),
-                                                new Server().url("http://walab.handong.edu:8080/milestone25_1").description("Production Server"),
-                                                new Server().url("http://localhost:8080/milestone25_1").description("Local Server")))
+                                                new Server().url("/milestone25_1").description("milestone25_1 (current)"),
+                                                new Server().url("http://walab.handong.edu:8080/milestone25_1").description("milestone25_1 - Production"),
+                                                new Server().url("http://localhost:8080/milestone25_1").description("milestone25_1 - Local"),
+                                                new Server().url("/mileage").description("mileage (current)"),
+                                                new Server().url("http://walab.handong.edu:8080/mileage").description("mileage - Production"),
+                                                new Server().url("http://localhost:8080/mileage").description("mileage - Local")))
                                 .addSecurityItem(new SecurityRequirement().addList("Bearer Authentication"))
                                 .components(new Components()
                                                 .addSecuritySchemes("Bearer Authentication", createAPIKeyScheme()));
