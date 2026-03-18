@@ -48,7 +48,11 @@ public class JwtTokenFilter extends OncePerRequestFilter {
             // Stype test endpoint (no auth)
             "/mileage/api/mileage/auth/stype-test",
             // Actuator (health, metrics for ops)
-            "/mileage/actuator(/.*)?");
+            "/mileage/actuator(/.*)?",
+            // Swagger (protected by SwaggerBasicAuthFilter; no JWT needed)
+            "/mileage/swagger-ui(/.*)?",
+            "/mileage/swagger-ui\\.html",
+            "/mileage/v3/api-docs(/.*)?");
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
