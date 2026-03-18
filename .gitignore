@@ -55,9 +55,6 @@ Users/*
 *.crt
 *.key
 
-### Configuration ###
-src/main/java/com/csee/swplus/mileage/auth/config/.
-
 ### Environment Variables ###
 .env
 .env.*
