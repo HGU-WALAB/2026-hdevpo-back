@@ -34,38 +34,23 @@ public class JwtTokenFilter extends OncePerRequestFilter {
 
     private static final List<String> EXCLUDED_PATHS = Arrays.asList(
             // Login/logout endpoints (with or without context path)
-            "/api/mileage/auth/login$",
-            "/milestone25/api/mileage/auth/login$",
             "/milestone25_1/api/mileage/auth/login$",
-            "/mileage/api/mileage/auth/login$",
-            "/api/mileage/auth/logout$",
-            "/milestone25/api/mileage/auth/logout$",
             "/milestone25_1/api/mileage/auth/logout$",
-            "/mileage/api/mileage/auth/logout$",
+
             // Public manager endpoints (contact, MyPage announcement, maintenance flag)
-            "/api/mileage/contact$",
-            "/api/mileage/announcement$",
-            "/api/mileage/maintenance$",
-            "/milestone25/api/mileage/contact$",
-            "/milestone25/api/mileage/announcement$",
-            "/milestone25/api/mileage/maintenance$",
             "/milestone25_1/api/mileage/contact$",
             "/milestone25_1/api/mileage/announcement$",
             "/milestone25_1/api/mileage/maintenance$",
             // GitHub OAuth callback (public - GitHub redirects here, but we check auth
             // manually)
             "/api/mileage/github/callback$",
-            "/milestone25/api/mileage/github/callback$",
             "/milestone25_1/api/mileage/github/callback$",
+
             // Swagger paths (with or without context path)
             "^/swagger-ui",
             "^/v3/api-docs",
             "^/swagger-resources",
             "^/webjars",
-            "^/milestone25/swagger-ui",
-            "^/milestone25/v3/api-docs",
-            "^/milestone25/swagger-resources",
-            "^/milestone25/webjars",
             "^/milestone25_1/swagger-ui",
             "^/milestone25_1/v3/api-docs",
             "^/milestone25_1/swagger-resources",
