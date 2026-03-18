@@ -5,45 +5,25 @@
 
 <mapper namespace="com.csee.swplus.mileage.user.mapper.StudentSchoolMapper">
 
+    <!-- Look up stype from _sw_mileage_student_school. Blank = match any.
+         No match -> return '기타'. Does not create new rows. -->
     <select id="findStype" resultType="String">
-        SELECT
-            CASE
-                WHEN school = '전산전자공학부'
-                    AND (major_1 LIKE '컴퓨터공학(%)'
-                        OR major_1 LIKE 'AI·컴퓨터공학심화(%)'
-                        OR major_1 LIKE '전자공학심화(%)'
-                        OR major_1 LIKE '전자공학(%)')
-                    THEN '전공'
-
-                WHEN school = '글로벌리더십학부'
-                    AND major_1 LIKE 'AI·컴퓨터공학심화(%)'
-                    THEN '1학년'
-
-                WHEN major_2 LIKE '컴퓨터공학(%)'
-                    OR major_2 LIKE 'IT(%)'
-                    OR major_2 LIKE 'ICT융합(%)'
-                    OR major_2 LIKE 'AI Convergence &amp; Entrepreneurship(%)'
-                    OR major_2 LIKE '데이터사이언스(%)'
-                    THEN '융합'
-
-                WHEN major_1 LIKE 'IT(%)'
-                    OR major_1 LIKE 'ICT융합(%)'
-                    OR major_1 LIKE 'AI Convergence &amp; Entrepreneurship(%)'
-                    THEN '융합'
-
-                WHEN (major_1 LIKE '생명과학(%)'
-                    OR major_1 LIKE '경영(%)'
-                    OR major_1 LIKE '경제(%)')
-                    AND major_2 = 'AI융합'
-                    THEN '융합'
-
-                ELSE '기타'
-                END
-        FROM _sw_student
-        WHERE school = #{school}
-          AND major_1 = #{major1}
-          AND (major_2 = #{major2} OR major_2 IS NULL)
-            LIMIT 1
+        SELECT COALESCE(
+            (SELECT r.stype
+             FROM _sw_mileage_student_school r
+             WHERE (r.school IS NULL OR r.school = '' OR r.school = #{school})
+               AND (r.major_1 IS NULL OR r.major_1 = ''
+                    OR (#{major1} IS NOT NULL AND (#{major1} LIKE CONCAT(r.major_1, '%') OR #{major1} = r.major_1)))
+               AND (r.major_2 IS NULL OR r.major_2 = ''
+                    OR (#{major2} IS NOT NULL AND (#{major2} LIKE CONCAT(r.major_2, '%') OR #{major2} = r.major_2)))
+             ORDER BY (CASE WHEN COALESCE(r.school,'') != '' THEN 1 ELSE 0 END)
+                    + (CASE WHEN COALESCE(r.major_1,'') != '' THEN 1 ELSE 0 END)
+                    + (CASE WHEN COALESCE(r.major_2,'') != '' THEN 1 ELSE 0 END) DESC,
+                    r.id ASC
+             LIMIT 1),
+            '기타'
+        )
     </select>
 
 </mapper>
+
