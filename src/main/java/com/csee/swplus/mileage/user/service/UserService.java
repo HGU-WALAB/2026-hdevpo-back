@@ -27,12 +27,12 @@ public class UserService {
                 user.getMajor1(),
                 user.getMajor2()
         );
-        return UserResponse.from(user, stype != null ? stype : "기타");
+        return UserResponse.from(user, stype != null ? stype : "기타");  // TODO: Use configurable default stype (matches StudentSchoolMapper fallback)
     }
 
     /** Test: lookup stype for given school/major combo. */
     public String getStypeForTest(String school, String major1, String major2) {
         String stype = studentSchoolMapper.findStype(school, major1, major2);
-        return stype != null ? stype : "기타";
+        return stype != null ? stype : "기타";  // TODO: Use configurable default stype
     }
 }

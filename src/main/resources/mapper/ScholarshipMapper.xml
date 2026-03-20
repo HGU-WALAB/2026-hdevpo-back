@@ -5,6 +5,7 @@
 <mapper namespace="com.csee.swplus.mileage.scholarship.mapper.ScholarshipMapper">
 
     <update id="updateStudentApplicationStatus" parameterType="map">
+        <!-- TODO: is_apply = 1 hardcoded - consider extracting to constant if status values grow -->
         UPDATE _sw_student
         SET is_apply = 1,
             apply_date = #{applyDate},

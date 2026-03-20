@@ -47,7 +47,7 @@
                     + (CASE WHEN COALESCE(r.major_2,'') != '' THEN 1 ELSE 0 END) DESC,
                     r.id ASC
              LIMIT 1),
-            '기타'
+            '기타'  <!-- TODO: Extract default stype to config/property (e.g. application.yml) instead of hardcoding -->
         )
     </select>
 

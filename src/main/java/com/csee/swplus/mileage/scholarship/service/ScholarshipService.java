@@ -30,6 +30,7 @@ public class ScholarshipService {
         String stype = userResponse.getStudentType();
         int term = userResponse.getTerm();
 
+        // TODO: Extract "기타" and max term (9) to config - scholarship eligibility rules should be configurable
         if(stype.equals("기타") || term > 9) {
             log.warn("⚠️ 마일리지 장학금 신청 권한이 없는 학생 - studentId: {}", studentId);
             throw new IllegalStateException("신청 대상자가 아닙니다.");

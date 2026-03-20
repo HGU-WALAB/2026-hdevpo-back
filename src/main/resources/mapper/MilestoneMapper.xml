@@ -108,6 +108,7 @@
                             AND s.semester_count = #{term}
                         </if>
                         <if test="entryYear != null">
+                            <!-- TODO: Assumes snum format - entry year at positions 2-3 (e.g. 22000056 -> 22) -->
                             AND SUBSTRING(s.snum, 2, 2) = #{entryYear}
                         </if>
                 ) AS groupSize
@@ -129,6 +130,7 @@
                     AND s.semester_count = #{term}
                 </if>
                 <if test="entryYear != null">
+                    <!-- TODO: Assumes snum format - entry year at positions 2-3 (e.g. 22000056 -> 22) -->
                     AND SUBSTRING(s.snum, 2, 2) = #{entryYear}
                 </if>
             GROUP BY m.id

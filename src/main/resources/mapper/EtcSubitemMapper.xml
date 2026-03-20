@@ -12,7 +12,7 @@
                mS.semester AS semester
 		FROM _sw_mileage_subitem AS mS
 		    INNER JOIN _sw_mileage_category AS mC
-                ON mS.category_id = mC.id AND mS.student_input = 'Y'
+                ON mS.category_id = mC.id AND mS.student_input = 'Y'  <!-- TODO: Extract 'Y' to config - student_input flag value -->
 		WHERE mS.semester = #{currentSemester}
 		ORDER BY mS.regdate;
     </select>
@@ -40,8 +40,8 @@
                            ON mR.id = mRF.record_id
         WHERE mR.semester = #{currentSemester}  -- 학기 조건
           AND mSt.snum = #{studentId} -- 특정 학생 조건
-          AND mR.category_id = '240'  -- subitem과 기타 category 연결
-          AND mS.student_input = 'Y'  -- student_input 조건
+          AND mR.category_id = '240'  <!-- TODO: Hardcoded category ID for "기타" - extract to config/property -->
+          AND mS.student_input = 'Y'  <!-- TODO: Extract 'Y' to config - student_input flag value -->
         ORDER BY mR.regdate;
     </select>
 

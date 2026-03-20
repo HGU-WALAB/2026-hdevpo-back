@@ -27,17 +27,17 @@
         LEFT JOIN _sw_mileage_record AS mR
         ON mR.subitem_id = mS.id
         AND (mR.snum = #{studentId} OR mR.snum IS NULL)  -- Ensure studentId is considered in the join
-        WHERE (#{semester} = 'all' OR mS.semester = #{semester})
+        WHERE (#{semester} = 'all' OR mS.semester = #{semester})  <!-- TODO: Extract 'all' filter sentinel to constant/config -->
 
         <if test="keyword != null and keyword != ''">
             AND mS.subitem_name LIKE CONCAT('%', #{keyword}, '%')
         </if>
 
-        <if test="category != 'all'">
+        <if test="category != 'all'">  <!-- TODO: Extract 'all' filter sentinel -->
             AND mC.cname = #{category}
         </if>
 
-        <if test="done != 'all'">
+        <if test="done != 'all'">  <!-- TODO: Extract 'all' filter sentinel -->
             AND (
             (#{done} = 'Y' AND mR.id IS NOT NULL)
             OR (#{done} = 'N' AND mR.id IS NULL)
@@ -45,6 +45,7 @@
         </if>
 
         <if test="studentId != null">
+            <!-- TODO: Assumes studentId format (position 2-3 = entry year) and semester format 20XX-01/02 - brittle if format changes -->
             AND mS.semester >= CONCAT('20', SUBSTRING(#{studentId}, 2, 2), '-01')
             AND mS.semester LIKE '20%'
             AND mS.semester REGEXP '^20\\d{2}-(01|02)$'

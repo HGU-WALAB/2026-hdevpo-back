@@ -7,7 +7,7 @@
     <select id="findAllAwards" resultType="com.csee.swplus.mileage.archive.award.dto.AwardResponseDto">
         SELECT a.id AS awardId,
                a.award_year AS awardYear,
-               NULLIF(NULLIF(a.award_date, ''), ' ') AS awardDate,
+               NULLIF(NULLIF(a.award_date, ''), ' ') AS awardDate,  <!-- TODO: Hardcoded empty/whitespace normalization - consider TRIM or configurable values -->
                a.contest_name AS contestName,
                a.award_name AS awardName,
                a.award_type AS awardType,
