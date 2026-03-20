@@ -5,8 +5,34 @@
 
 <mapper namespace="com.csee.swplus.mileage.user.mapper.StudentSchoolMapper">
 
-    <!-- Look up stype from _sw_mileage_student_school. Blank = match any.
-         No match -> return '기타'. Does not create new rows. -->
+    <!--
+        STYPE LOOKUP QUERY
+        ==================
+        Resolves the student type (stype) for a user based on their school, major1, and major2.
+        Uses _sw_mileage_student_school as a lookup table. Does NOT create new rows.
+        If no matching row is found, returns '기타' (Other).
+
+        HOW THE MATCHING WORKS:
+        -----------------------
+        - Blank/NULL in the lookup table = "match any" (wildcard).
+        - school:  Matches if r.school is blank OR equals the user's department.
+        - major_1: Matches if r.major_1 is blank OR user's major1 starts with r.major_1 (prefix)
+                   OR equals exactly. (e.g. r.major_1='CS' matches major1='Computer Science')
+        - major_2: Same logic as major_1 for the second major field.
+
+        MATCH PRIORITY (ORDER BY):
+        --------------------------
+        Rows are sorted so the MOST SPECIFIC match wins:
+        - Count non-empty columns in the lookup row (school, major_1, major_2).
+        - Higher count = more specific (e.g. school+major1+major2 > school only).
+        - Among ties, lower r.id wins (first inserted rule takes precedence).
+
+        EXAMPLE:
+        - User: school='CSEE', major1='Computer Science', major2='AI'
+        - Row A: school='CSEE', major_1='Computer', major_2=NULL  -> matches, specificity=2
+        - Row B: school='CSEE', major_1=NULL, major_2=NULL         -> matches, specificity=1
+        - Row A wins (more specific).
+    -->
     <select id="findStype" resultType="String">
         SELECT COALESCE(
             (SELECT r.stype

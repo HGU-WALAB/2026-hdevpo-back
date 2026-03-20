@@ -20,7 +20,8 @@ public class UserService {
         Users user = userRepository.findByUniqueId(studentId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        // stype은 _sw_mileage_student_school에서 조회 (테이블에 없으면 '기타', 신규 행 생성 안 함)
+        // stype: school/major1/major2로 _sw_mileage_student_school에서 조회.
+        // See StudentSchoolMapper.xml findStype - 가장 구체적인 매칭 행의 stype 반환, 없으면 '기타'.
         String stype = studentSchoolMapper.findStype(
                 user.getDepartment(),
                 user.getMajor1(),
