@@ -131,6 +131,46 @@ public class PortfolioService {
     }
 
     /**
+     * Fetches commit count for a repo via GET /repos/{owner}/{repo}/commits?per_page=1.
+     * Parses the Link header rel="last" to get total page count (= total commits).
+     * Returns null on failure or empty repo.
+     */
+    private Integer fetchCommitCount(String owner, String repoName, String githubToken) {
+        if (owner == null || owner.isEmpty() || repoName == null || repoName.isEmpty()) {
+            return null;
+        }
+        try {
+            String url = githubApiBaseUrl + "/repos/" + owner + "/" + repoName + "/commits?per_page=1";
+            HttpEntity<Void> req;
+            if (githubToken != null && !githubToken.isEmpty()) {
+                HttpHeaders headers = new HttpHeaders();
+                headers.setBearerAuth(githubToken);
+                headers.setAccept(Collections.singletonList(MediaType.APPLICATION_JSON));
+                req = new HttpEntity<>(headers);
+            } else {
+                req = new HttpEntity<>(new HttpHeaders());
+            }
+            ResponseEntity<Object[]> res = restTemplate.exchange(url, HttpMethod.GET, req, Object[].class);
+            java.util.List<String> linkHeaders = res.getHeaders().get("Link");
+            if (linkHeaders != null && !linkHeaders.isEmpty()) {
+                // Parse Link: <url?page=N>; rel="last" or rel="last" link
+                java.util.regex.Pattern p = java.util.regex.Pattern.compile("page=(\\d+)");
+                java.util.regex.Matcher m = p.matcher(linkHeaders.get(0));
+                int lastPage = 0;
+                while (m.find()) {
+                    lastPage = Integer.parseInt(m.group(1));
+                }
+                if (lastPage > 0) return lastPage;
+            }
+            // No Link header = single page: 0 or 1 commits
+            Object[] body = res.getBody();
+            return (body != null && body.length > 0) ? 1 : 0;
+        } catch (Exception ex) {
+            return null;
+        }
+    }
+
+    /**
      * GET /api/portfolio/user-info – 기본 정보 (학교 정보 + bio + profile_image_url).
      */
     public UserInfoResponse getUserInfo(Users user) {
@@ -304,6 +344,8 @@ public class PortfolioService {
                                     RepoLanguageDto.builder().name(language).percentage(null).build());
                         }
 
+                        Integer commitCount = fetchCommitCount(ownerLogin, name, githubToken);
+
                         list.add(RepoEntryResponse.builder()
                                 .id(selected != null ? selected.getId() : null)
                                 .repo_id(repoId)
@@ -319,6 +361,7 @@ public class PortfolioService {
                                 .updated_at(updatedAt)
                                 .visibility(vis)
                                 .owner(ownerLogin)
+                                .commit_count(commitCount)
                                 .build());
                     }
                 }
@@ -427,6 +470,8 @@ public class PortfolioService {
                     RepoLanguageDto.builder().name(language).percentage(null).build());
         }
 
+        Integer commitCount = fetchCommitCount(ownerLogin, name, githubToken);
+
         return RepoEntryResponse.builder()
                 .id(entry.getId())
                 .repo_id(entry.getRepoId())
@@ -440,6 +485,8 @@ public class PortfolioService {
                 .languages(languages)
                 .created_at(createdAt)
                 .updated_at(updatedAt)
+                .owner(ownerLogin)
+                .commit_count(commitCount)
                 .build();
     }
 

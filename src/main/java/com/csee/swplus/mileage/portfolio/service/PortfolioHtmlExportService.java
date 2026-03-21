@@ -102,7 +102,8 @@ public class PortfolioHtmlExportService {
                 String desc = r.getDescription() != null ? r.getDescription() : "";
                 String langStr = formatRepoLanguages(r);
                 if (!langStr.isEmpty()) langStr = " (" + langStr + ")";
-                sb.append("- ").append(title).append(" - ").append(desc).append(langStr).append("\n");
+                String commitStr = (r.getCommit_count() != null) ? " " + r.getCommit_count() + " commits" : "";
+                sb.append("- ").append(title).append(" - ").append(desc).append(langStr).append(commitStr).append("\n");
                 if (r.getHtml_url() != null) sb.append(r.getHtml_url()).append("\n");
             }
         }
@@ -252,6 +253,9 @@ public class PortfolioHtmlExportService {
                                 : lang.getName();
                         sb.append("<span class=\"tech-tag\">").append(escape(display)).append("</span>");
                     }
+                }
+                if (r.getCommit_count() != null) {
+                    sb.append("<span class=\"tech-tag commit-count\">").append(r.getCommit_count()).append(" commits</span>");
                 }
                 sb.append("</div></div>");
             }
