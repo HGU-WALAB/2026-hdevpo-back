@@ -97,8 +97,9 @@ public class PortfolioHtmlExportService {
                 String title = r.getCustom_title() != null && !r.getCustom_title().isEmpty() ? r.getCustom_title() : r.getName();
                 if (title == null) title = "Repository";
                 String desc = r.getDescription() != null ? r.getDescription() : "";
-                String lang = r.getLanguage() != null && !r.getLanguage().isEmpty() ? " (" + r.getLanguage() + ")" : "";
-                sb.append("- ").append(title).append(" - ").append(desc).append(lang).append("\n");
+                String langStr = formatRepoLanguages(r);
+                if (!langStr.isEmpty()) langStr = " (" + langStr + ")";
+                sb.append("- ").append(title).append(" - ").append(desc).append(langStr).append("\n");
                 if (r.getHtml_url() != null) sb.append(r.getHtml_url()).append("\n");
             }
         }
@@ -150,6 +151,23 @@ public class PortfolioHtmlExportService {
 
     private String nullToEmpty(Object o) {
         return o == null ? "" : String.valueOf(o);
+    }
+
+    /** Prefer languages list; fall back to single language. */
+    private java.util.List<String> getRepoLanguagesForDisplay(RepoEntryResponse r) {
+        if (r.getLanguages() != null && !r.getLanguages().isEmpty()) {
+            return r.getLanguages();
+        }
+        if (r.getLanguage() != null && !r.getLanguage().isEmpty()) {
+            return java.util.Collections.singletonList(r.getLanguage());
+        }
+        return java.util.Collections.emptyList();
+    }
+
+    /** Format languages for plain text (e.g. "Java, Python, JavaScript"). */
+    private String formatRepoLanguages(RepoEntryResponse r) {
+        java.util.List<String> langList = getRepoLanguagesForDisplay(r);
+        return String.join(", ", langList);
     }
 
     private String buildHtml(UserInfoResponse userInfo, TechStackResponse techStack,
@@ -206,13 +224,15 @@ public class PortfolioHtmlExportService {
                 String title = r.getCustom_title() != null && !r.getCustom_title().isEmpty() ? r.getCustom_title() : r.getName();
                 if (title == null) title = "Repository";
                 String desc = r.getDescription() != null ? r.getDescription() : "";
-                String lang = r.getLanguage() != null ? r.getLanguage() : "";
+                java.util.List<String> langList = getRepoLanguagesForDisplay(r);
                 String link = r.getHtml_url() != null ? r.getHtml_url() : "#";
                 sb.append("<div class=\"project-card\">");
                 sb.append("<h3><a href=\"").append(escape(link)).append("\" target=\"_blank\" rel=\"noopener\">").append(escape(title)).append("</a></h3>");
                 if (!desc.isEmpty()) sb.append("<p>").append(escape(desc)).append("</p>");
                 sb.append("<div class=\"tech-tags\">");
-                if (!lang.isEmpty()) sb.append("<span class=\"tech-tag\">").append(escape(lang)).append("</span>");
+                for (String lang : langList) {
+                    if (lang != null && !lang.isEmpty()) sb.append("<span class=\"tech-tag\">").append(escape(lang)).append("</span>");
+                }
                 sb.append("</div></div>");
             }
             sb.append("</section>\n");

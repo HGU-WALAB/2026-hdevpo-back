@@ -44,8 +44,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional
@@ -78,6 +78,40 @@ public class PortfolioService {
                         Portfolio.builder()
                                 .user(user)
                                 .build()));
+    }
+
+    /**
+     * Fetches all languages for a repo via GET /repos/{owner}/{repo}/languages.
+     * Returns languages sorted by byte count descending (primary first). Limited to 15.
+     */
+    @SuppressWarnings("unchecked")
+    private List<String> fetchRepoLanguages(String owner, String repoName, String githubToken) {
+        if (owner == null || owner.isEmpty() || repoName == null || repoName.isEmpty()) {
+            return Collections.emptyList();
+        }
+        try {
+            String url = githubApiBaseUrl + "/repos/" + owner + "/" + repoName + "/languages";
+            HttpEntity<Void> req;
+            if (githubToken != null && !githubToken.isEmpty()) {
+                HttpHeaders headers = new HttpHeaders();
+                headers.setBearerAuth(githubToken);
+                headers.setAccept(Collections.singletonList(MediaType.APPLICATION_JSON));
+                req = new HttpEntity<>(headers);
+            } else {
+                req = new HttpEntity<>(new HttpHeaders());
+            }
+            ResponseEntity<Map> res = restTemplate.exchange(url, HttpMethod.GET, req, Map.class);
+            Map<String, Object> raw = res.getBody();
+            if (raw == null || raw.isEmpty()) return Collections.emptyList();
+            return raw.entrySet().stream()
+                    .filter(e -> e.getValue() instanceof Number)
+                    .sorted(Comparator.<Map.Entry<String, Object>>comparingLong(e -> ((Number) e.getValue()).longValue()).reversed())
+                    .limit(15)
+                    .map(Map.Entry::getKey)
+                    .collect(Collectors.toList());
+        } catch (Exception ex) {
+            return Collections.emptyList();
+        }
     }
 
     /**
@@ -248,6 +282,11 @@ public class PortfolioService {
                             ownerLogin = (String) ((Map<?, ?>) ownerObj).get("login");
                         }
 
+                        List<String> languages = fetchRepoLanguages(ownerLogin, name, githubToken);
+                        if (languages.isEmpty() && language != null && !language.isEmpty()) {
+                            languages = Collections.singletonList(language);
+                        }
+
                         list.add(RepoEntryResponse.builder()
                                 .id(selected != null ? selected.getId() : null)
                                 .repo_id(repoId)
@@ -258,6 +297,7 @@ public class PortfolioService {
                                 .name(name)
                                 .html_url(htmlUrl)
                                 .language(language)
+                                .languages(languages)
                                 .created_at(createdAt)
                                 .updated_at(updatedAt)
                                 .visibility(vis)
@@ -330,8 +370,17 @@ public class PortfolioService {
         String name = null;
         String htmlUrl = null;
         String language = null;
+        String ownerLogin = null;
         String createdAt = null;
         String updatedAt = null;
+
+        String githubToken = null;
+        if (tokenEncryptionKey != null && !tokenEncryptionKey.isEmpty()) {
+            Profile profile = profileRepository.findBySnum(user.getUniqueId()).orElse(null);
+            if (profile != null && profile.getGithubAccessToken() != null && !profile.getGithubAccessToken().isEmpty()) {
+                githubToken = TokenEncryptionUtil.decrypt(profile.getGithubAccessToken(), tokenEncryptionKey);
+            }
+        }
 
         try {
             @SuppressWarnings("unchecked")
@@ -342,6 +391,10 @@ public class PortfolioService {
                 name = (String) repo.get("name");
                 htmlUrl = (String) repo.get("html_url");
                 language = (String) repo.get("language");
+                Object ownerObj = repo.get("owner");
+                if (ownerObj instanceof Map) {
+                    ownerLogin = (String) ((Map<?, ?>) ownerObj).get("login");
+                }
                 Object c = repo.get("created_at");
                 Object u = repo.get("updated_at");
                 createdAt = c != null ? c.toString() : null;
@@ -349,6 +402,11 @@ public class PortfolioService {
             }
         } catch (Exception ex) {
             // ignore GitHub errors here; return DB fields only
+        }
+
+        List<String> languages = fetchRepoLanguages(ownerLogin, name, githubToken);
+        if (languages.isEmpty() && language != null && !language.isEmpty()) {
+            languages = Collections.singletonList(language);
         }
 
         return RepoEntryResponse.builder()
@@ -361,6 +419,7 @@ public class PortfolioService {
                 .name(name)
                 .html_url(htmlUrl)
                 .language(language)
+                .languages(languages)
                 .created_at(createdAt)
                 .updated_at(updatedAt)
                 .build();

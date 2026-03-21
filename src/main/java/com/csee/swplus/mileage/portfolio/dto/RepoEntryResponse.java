@@ -5,6 +5,8 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 /**
  * One item in GET /api/portfolio/repositories response.
  */
@@ -24,7 +26,10 @@ public class RepoEntryResponse {
     // Live GitHub repo data (public API)
     private String name;
     private String html_url;
+    /** Primary language (from repo list API). Kept for backward compatibility. */
     private String language;
+    /** All languages from GET /repos/{owner}/{repo}/languages, sorted by byte count desc. */
+    private List<String> languages;
     private String created_at;
     private String updated_at;
     /** public or private */
