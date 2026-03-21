@@ -335,6 +335,9 @@ public class PortfolioService {
                         Integer stargazersCount = null;
                         Object sc = repo.get("stargazers_count");
                         if (sc instanceof Number) stargazersCount = ((Number) sc).intValue();
+                        Integer forksCount = null;
+                        Object fc = repo.get("forks_count");
+                        if (fc instanceof Number) forksCount = ((Number) fc).intValue();
                         String ownerLogin = null;
                         Object ownerObj = repo.get("owner");
                         if (ownerObj instanceof Map) {
@@ -366,6 +369,7 @@ public class PortfolioService {
                                 .owner(ownerLogin)
                                 .commit_count(commitCount)
                                 .stargazers_count(stargazersCount)
+                                .forks_count(forksCount)
                                 .build());
                     }
                 }
@@ -438,6 +442,7 @@ public class PortfolioService {
         String createdAt = null;
         String updatedAt = null;
         Integer stargazersCount = null;
+        Integer forksCount = null;
 
         String githubToken = null;
         if (tokenEncryptionKey != null && !tokenEncryptionKey.isEmpty()) {
@@ -466,6 +471,8 @@ public class PortfolioService {
                 updatedAt = u != null ? u.toString() : null;
                 Object sc = repo.get("stargazers_count");
                 if (sc instanceof Number) stargazersCount = ((Number) sc).intValue();
+                Object fc = repo.get("forks_count");
+                if (fc instanceof Number) forksCount = ((Number) fc).intValue();
             }
         } catch (Exception ex) {
             // ignore GitHub errors here; return DB fields only
@@ -495,6 +502,7 @@ public class PortfolioService {
                 .owner(ownerLogin)
                 .commit_count(commitCount)
                 .stargazers_count(stargazersCount)
+                .forks_count(forksCount)
                 .build();
     }
 

@@ -40,4 +40,6 @@ public class RepoEntryResponse {
     private Integer commit_count;
     /** Star count (from GitHub API). Null if unavailable. */
     private Integer stargazers_count;
+    /** Fork count (from GitHub API). Null if unavailable. */
+    private Integer forks_count;
 }
