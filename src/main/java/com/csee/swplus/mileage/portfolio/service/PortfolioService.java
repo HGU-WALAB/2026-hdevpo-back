@@ -536,8 +536,8 @@ public class PortfolioService {
     public ActivitiesResponse getActivities(Users user, java.util.List<String> categories) {
         Portfolio portfolio = getOrCreatePortfolio(user);
         java.util.List<PortfolioActivity> list = (categories != null && !categories.isEmpty())
-                ? portfolioActivityRepository.findByPortfolio_IdAndCategoryInOrderByDisplayOrderAscStartDateDesc(portfolio.getId(), categories)
-                : portfolioActivityRepository.findByPortfolio_IdOrderByDisplayOrderAscStartDateDesc(portfolio.getId());
+                ? portfolioActivityRepository.findByPortfolio_IdAndCategoryInOrderByCategoryAscDisplayOrderAsc(portfolio.getId(), categories)
+                : portfolioActivityRepository.findByPortfolio_IdOrderByCategoryAscDisplayOrderAsc(portfolio.getId());
         java.util.List<ActivityResponse> responses = new java.util.ArrayList<>();
         for (PortfolioActivity a : list) {
             responses.add(toActivityResponse(a));
@@ -550,7 +550,7 @@ public class PortfolioService {
      */
     public ActivityResponse createActivity(Users user, ActivityRequest request) {
         Portfolio portfolio = getOrCreatePortfolio(user);
-        int nextOrder = portfolioActivityRepository.findByPortfolio_IdOrderByDisplayOrderAscStartDateDesc(portfolio.getId()).size();
+        int nextOrder = portfolioActivityRepository.findByPortfolio_IdOrderByCategoryAscDisplayOrderAsc(portfolio.getId()).size();
         PortfolioActivity activity = PortfolioActivity.builder()
                 .portfolio(portfolio)
                 .title(request.getTitle())

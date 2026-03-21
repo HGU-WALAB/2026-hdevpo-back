@@ -10,9 +10,9 @@ import java.util.Optional;
 @Repository
 public interface PortfolioActivityRepository extends JpaRepository<PortfolioActivity, Long> {
 
-    List<PortfolioActivity> findByPortfolio_IdOrderByDisplayOrderAscStartDateDesc(Long portfolioId);
+    List<PortfolioActivity> findByPortfolio_IdOrderByCategoryAscDisplayOrderAsc(Long portfolioId);
 
-    List<PortfolioActivity> findByPortfolio_IdAndCategoryInOrderByDisplayOrderAscStartDateDesc(Long portfolioId, List<String> categories);
+    List<PortfolioActivity> findByPortfolio_IdAndCategoryInOrderByCategoryAscDisplayOrderAsc(Long portfolioId, List<String> categories);
 
     Optional<PortfolioActivity> findByIdAndPortfolio_Id(Long id, Long portfolioId);
 }
