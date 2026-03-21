@@ -1,14 +1,28 @@
 ---
-name: Feature request
-about: 기능 추가 이슈 템플릿
+name: Feature Request
+about: Suggest a new feature or enhancement
 title: "[FEAT] "
-labels: feature
+labels: enhancement
 assignees: ''
 
 ---
 
-## ✨ 기능 개요
-> 구현하고자 하는 기능에 대한 간단한 설명을 적어주세요
+## Summary
 
-## 📝 해야 할 작업
-- [ ] TODO
+<!-- Brief description of the feature -->
+
+## Problem / Motivation
+
+<!-- What problem does this solve? Why is it needed? -->
+
+## Proposed Solution
+
+<!-- Describe the desired behavior or implementation -->
+
+## Alternatives Considered
+
+<!-- Other approaches you've thought about -->
+
+## Additional Context
+
+<!-- Screenshots, mockups, or related issues -->

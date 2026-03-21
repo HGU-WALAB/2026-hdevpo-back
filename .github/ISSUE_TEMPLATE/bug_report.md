@@ -1,17 +1,37 @@
 ---
-name: Bug report
-about: 버그 이슈 템플릿
-title: ''
+name: Bug Report
+about: Report a bug or unexpected behavior
+title: "[BUG] "
 labels: bug
 assignees: ''
 
 ---
 
-## 🐛 버그 발생 환경
-> 버그가 발생한 환경이나 상황에 대해 설명해주세요
+## Description
 
-## 🎯 기대했던 동작
-> 정상적으로 작동했을 때 기대했던 동작을 설명해주세요
+<!-- Clear, concise description of the bug -->
 
-## 🕒 예상 소요 시간 (완료 예상일)
-> 이 문제 해결에 예상되는 소요 시간을 시간 또는 일 단위로 기재해주세요.
+## Steps to Reproduce
+
+1. 
+2. 
+3. 
+4. 
+
+## Expected Behavior
+
+<!-- What should have happened -->
+
+## Actual Behavior
+
+<!-- What actually happened -->
+
+## Environment
+
+- OS: 
+- Browser / Client: 
+- Version: 
+
+## Additional Context
+
+<!-- Screenshots, logs, or other relevant info -->
