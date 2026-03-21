@@ -21,7 +21,7 @@ public class ActivityResponse {
     private String description;
     private LocalDate start_date;
     private LocalDate end_date;
-    /** Category: 1=activity, 2=project, 3=certificate, 4=camp, etc. */
-    private Integer category;
+    /** Category: "activity", "project", "certificate", "camp", "other", etc. */
+    private String category;
     private Integer display_order;
 }

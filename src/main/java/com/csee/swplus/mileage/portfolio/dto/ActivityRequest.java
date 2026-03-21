@@ -28,6 +28,6 @@ public class ActivityRequest {
 
     private LocalDate end_date;
 
-    /** Category: 1=activity, 2=project, 3=certificate, 4=camp, etc. */
-    private Integer category;
+    /** Category: "activity", "project", "certificate", "camp", "other", etc. */
+    private String category;
 }

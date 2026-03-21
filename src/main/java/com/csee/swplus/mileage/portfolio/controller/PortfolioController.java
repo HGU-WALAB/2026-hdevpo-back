@@ -232,11 +232,11 @@ public class PortfolioController {
     }
 
     /**
-     * GET /api/portfolio/activities – 활동 목록. Optional: ?category=1&category=2 to filter by category (default: full list).
+     * GET /api/portfolio/activities – 활동 목록. Optional: ?category=activity&category=project to filter (default: full list).
      */
     @GetMapping("/activities")
     public ResponseEntity<ActivitiesResponse> getActivities(
-            @RequestParam(value = "category", required = false) List<Integer> categories) {
+            @RequestParam(value = "category", required = false) List<String> categories) {
         Users user = getCurrentUser();
         return ResponseEntity.ok(portfolioService.getActivities(user, categories));
     }
@@ -261,7 +261,7 @@ public class PortfolioController {
     }
 
     /**
-     * PATCH /api/portfolio/activities/{id} – 활동 일부 수정 (보내진 필드만 반영). Body: { "category": 2 }, { "title": "..." }, etc.
+     * PATCH /api/portfolio/activities/{id} – 활동 일부 수정 (보내진 필드만 반영). Body: { "category": "project" }, { "title": "..." }, etc.
      */
     @PatchMapping("/activities/{id}")
     public ResponseEntity<ActivityResponse> patchActivity(@PathVariable Long id, @RequestBody ActivityPatchRequest request) {
@@ -270,7 +270,7 @@ public class PortfolioController {
     }
 
     /**
-     * PATCH /api/portfolio/activities – 전체 목록 일부 수정. Body: [ { "id": 1, "category": 2 }, { "id": 2, "title": "..." }, ... ]
+     * PATCH /api/portfolio/activities – 전체 목록 일부 수정. Body: [ { "id": 1, "category": "project" }, { "id": 2, "title": "..." }, ... ]
      * 각 항목은 id로 식별되며, 보내진 필드만 반영됩니다.
      */
     @PatchMapping("/activities")

@@ -10,7 +10,7 @@ import java.time.LocalDate;
 /**
  * One item in PATCH /api/portfolio/activities (full list).
  * id is required; other fields are optional (only non-null are applied).
- * Category: 1=activity, 2=project, 3=certificate, 4=camp, etc.
+ * Category: "activity", "project", "certificate", "camp", "other", etc.
  */
 @Getter
 @Setter
@@ -25,5 +25,5 @@ public class ActivityPatchItemRequest {
     private String description;
     private LocalDate start_date;
     private LocalDate end_date;
-    private Integer category;
+    private String category;
 }
