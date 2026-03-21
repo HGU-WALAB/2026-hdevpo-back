@@ -103,7 +103,8 @@ public class PortfolioHtmlExportService {
                 String langStr = formatRepoLanguages(r);
                 if (!langStr.isEmpty()) langStr = " (" + langStr + ")";
                 String commitStr = (r.getCommit_count() != null) ? " " + r.getCommit_count() + " commits" : "";
-                sb.append("- ").append(title).append(" - ").append(desc).append(langStr).append(commitStr).append("\n");
+                String starStr = (r.getStargazers_count() != null) ? " " + r.getStargazers_count() + " stars" : "";
+                sb.append("- ").append(title).append(" - ").append(desc).append(langStr).append(commitStr).append(starStr).append("\n");
                 if (r.getHtml_url() != null) sb.append(r.getHtml_url()).append("\n");
             }
         }
@@ -256,6 +257,9 @@ public class PortfolioHtmlExportService {
                 }
                 if (r.getCommit_count() != null) {
                     sb.append("<span class=\"tech-tag commit-count\">").append(r.getCommit_count()).append(" commits</span>");
+                }
+                if (r.getStargazers_count() != null) {
+                    sb.append("<span class=\"tech-tag star-count\">").append(r.getStargazers_count()).append(" ★</span>");
                 }
                 sb.append("</div></div>");
             }

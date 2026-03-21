@@ -38,4 +38,6 @@ public class RepoEntryResponse {
     private String owner;
     /** Total commit count on default branch (from GitHub API). Null if unavailable. */
     private Integer commit_count;
+    /** Star count (from GitHub API). Null if unavailable. */
+    private Integer stargazers_count;
 }

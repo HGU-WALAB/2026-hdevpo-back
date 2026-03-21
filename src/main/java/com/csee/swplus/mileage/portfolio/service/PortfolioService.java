@@ -332,6 +332,9 @@ public class PortfolioService {
                         String updatedAt = u != null ? u.toString() : null;
                         Boolean isPrivate = (Boolean) repo.get("private");
                         String vis = isPrivate != null && isPrivate ? "private" : "public";
+                        Integer stargazersCount = null;
+                        Object sc = repo.get("stargazers_count");
+                        if (sc instanceof Number) stargazersCount = ((Number) sc).intValue();
                         String ownerLogin = null;
                         Object ownerObj = repo.get("owner");
                         if (ownerObj instanceof Map) {
@@ -362,6 +365,7 @@ public class PortfolioService {
                                 .visibility(vis)
                                 .owner(ownerLogin)
                                 .commit_count(commitCount)
+                                .stargazers_count(stargazersCount)
                                 .build());
                     }
                 }
@@ -433,6 +437,7 @@ public class PortfolioService {
         String ownerLogin = null;
         String createdAt = null;
         String updatedAt = null;
+        Integer stargazersCount = null;
 
         String githubToken = null;
         if (tokenEncryptionKey != null && !tokenEncryptionKey.isEmpty()) {
@@ -459,6 +464,8 @@ public class PortfolioService {
                 Object u = repo.get("updated_at");
                 createdAt = c != null ? c.toString() : null;
                 updatedAt = u != null ? u.toString() : null;
+                Object sc = repo.get("stargazers_count");
+                if (sc instanceof Number) stargazersCount = ((Number) sc).intValue();
             }
         } catch (Exception ex) {
             // ignore GitHub errors here; return DB fields only
@@ -487,6 +494,7 @@ public class PortfolioService {
                 .updated_at(updatedAt)
                 .owner(ownerLogin)
                 .commit_count(commitCount)
+                .stargazers_count(stargazersCount)
                 .build();
     }
 
