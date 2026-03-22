@@ -48,23 +48,6 @@ public class PortfolioCvService {
     }
 
     /**
-     * Creates a new CV after user pastes LLM-generated HTML.
-     */
-    public CvResponse create(Users user, CvCreateRequest request) {
-        PortfolioCv cv = PortfolioCv.builder()
-                .user(user)
-                .title(request.getTitle())
-                .jobPosting(request.getJob_posting())
-                .targetPosition(request.getTarget_position())
-                .additionalNotes(request.getAdditional_notes())
-                .prompt(request.getPrompt())
-                .htmlContent(request.getHtml_content())
-                .build();
-        cv = cvRepository.save(cv);
-        return toResponse(cv);
-    }
-
-    /**
      * Lists all CVs for the user, ordered by creation date descending.
      */
     public CvListResponse list(Users user) {

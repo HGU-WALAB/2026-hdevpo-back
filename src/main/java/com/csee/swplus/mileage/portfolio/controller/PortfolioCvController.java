@@ -10,8 +10,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
-import javax.validation.Valid;
-
 /**
  * CV/Resume Maker API. Grouped separately in Swagger under "CV (이력서)".
  * Base path: /api/portfolio/cv
@@ -33,16 +31,6 @@ public class PortfolioCvController {
     public ResponseEntity<CvBuildPromptResponse> buildPrompt(@RequestBody CvBuildPromptRequest request) {
         Users user = getCurrentUser();
         return ResponseEntity.ok(portfolioCvService.buildPrompt(user, request != null ? request : new CvBuildPromptRequest()));
-    }
-
-    /**
-     * POST /api/portfolio/cv – Create CV after user pastes LLM-generated HTML.
-     * Body: { title, job_posting, target_position, additional_notes, prompt, html_content }
-     */
-    @PostMapping
-    public ResponseEntity<CvResponse> create(@Valid @RequestBody CvCreateRequest request) {
-        Users user = getCurrentUser();
-        return ResponseEntity.ok(portfolioCvService.create(user, request));
     }
 
     /**
