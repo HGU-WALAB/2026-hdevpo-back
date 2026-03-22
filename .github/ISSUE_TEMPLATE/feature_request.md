@@ -1,6 +1,5 @@
----
 name: Feature Request
-about: Suggest a new feature or enhancement
+about: Suggest a new feature
 title: "[FEAT] "
 labels: enhancement
 assignees: ''
@@ -9,20 +8,16 @@ assignees: ''
 
 ## Summary
 
-<!-- Brief description of the feature -->
+<!-- One-line description of the feature -->
 
-## Problem / Motivation
+## Motivation
 
-<!-- What problem does this solve? Why is it needed? -->
+<!-- Why do you want this? What problem does it solve? -->
 
 ## Proposed Solution
 
-<!-- Describe the desired behavior or implementation -->
+<!-- How you plan to implement it -->
 
-## Alternatives Considered
+## Notes
 
-<!-- Other approaches you've thought about -->
-
-## Additional Context
-
-<!-- Screenshots, mockups, or related issues -->
+<!-- Optional: anything to remember or link to related code/issues -->

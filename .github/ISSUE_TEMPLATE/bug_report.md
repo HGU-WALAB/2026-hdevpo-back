@@ -1,6 +1,5 @@
----
 name: Bug Report
-about: Report a bug or unexpected behavior
+about: Report a bug
 title: "[BUG] "
 labels: bug
 assignees: ''
@@ -9,29 +8,23 @@ assignees: ''
 
 ## Description
 
-<!-- Clear, concise description of the bug -->
+<!-- One-line summary of the bug -->
 
 ## Steps to Reproduce
 
-1. 
-2. 
-3. 
-4. 
+1.
+2.
 
-## Expected Behavior
+## Expected vs Actual
 
-<!-- What should have happened -->
-
-## Actual Behavior
-
-<!-- What actually happened -->
+- **Expected:**
+- **Actual:**
 
 ## Environment
 
-- OS: 
-- Browser / Client: 
-- Version: 
+- OS / Device:
+- Version:
 
-## Additional Context
+## Notes / Logs
 
-<!-- Screenshots, logs, or other relevant info -->
+<!-- Optional: stack traces, screenshots, or anything to remember -->
