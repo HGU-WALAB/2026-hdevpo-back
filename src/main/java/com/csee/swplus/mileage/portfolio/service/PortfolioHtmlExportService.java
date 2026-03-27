@@ -83,16 +83,7 @@ public class PortfolioHtmlExportService {
           .append(nullToEmpty(userInfo.getSemester())).append("학기)\n");
         sb.append("- 한줄 자기소개: ").append(nullToEmpty(userInfo.getBio())).append("\n\n");
 
-        sb.append("[tech_stack]\n");
-        if (techStack.getTech_stack() != null) {
-            for (TechStackItem t : techStack.getTech_stack()) {
-                String line = t.getName() != null ? t.getName() : "";
-                if (t.getDomain() != null && !t.getDomain().isEmpty()) line += " (" + t.getDomain() + ")";
-                if (t.getLevel() != null) line += " " + t.getLevel() + "%";
-                sb.append("- ").append(line).append("\n");
-            }
-        }
-        sb.append("\n");
+        appendTechStackPlainText(sb, techStack);
 
         sb.append("[github_repos]\n");
         if (repos.getRepositories() != null) {
@@ -155,6 +146,107 @@ public class PortfolioHtmlExportService {
         return PROMPT_HEAD + inputData + PROMPT_TAIL;
     }
 
+<<<<<<< Updated upstream
+=======
+    /**
+     * Builds CV-specific LLM prompt with job info and selected portfolio items only.
+     * Bio and tech stack are always included. Repos, mileage, activities are filtered by selected IDs.
+     */
+    public String buildCvPrompt(Users user, CvBuildPromptRequest request) {
+        java.util.Set<Long> repoIds = request.getSelected_repo_ids() != null
+                ? new java.util.HashSet<>(request.getSelected_repo_ids()) : java.util.Collections.emptySet();
+        java.util.Set<Long> mileageIds = request.getSelected_mileage_ids() != null
+                ? new java.util.HashSet<>(request.getSelected_mileage_ids()) : java.util.Collections.emptySet();
+        java.util.Set<Long> activityIds = request.getSelected_activity_ids() != null
+                ? new java.util.HashSet<>(request.getSelected_activity_ids()) : java.util.Collections.emptySet();
+
+        UserInfoResponse userInfo = portfolioService.getUserInfo(user);
+        TechStackResponse techStack = portfolioService.getTechStack(user);
+        RepositoriesResponse repos = portfolioService.getRepositories(user, 1, 100, true, false);
+        MileageListResponse mileage = portfolioService.getMileageList(user);
+        ActivitiesResponse activities = portfolioService.getActivities(user, null);
+
+        String githubUrl = null;
+        Profile profile = profileRepository.findBySnum(user.getUniqueId()).orElse(null);
+        if (profile != null && profile.getGithubLink() != null && !profile.getGithubLink().isEmpty()) {
+            githubUrl = profile.getGithubLink();
+        } else if (profile != null && profile.getGithubUsername() != null) {
+            githubUrl = "https://github.com/" + profile.getGithubUsername();
+        }
+        String email = user.getEmail();
+
+        StringBuilder sb = new StringBuilder();
+
+        sb.append("[job_info]\n");
+        sb.append("- 공고정보: ").append(nullToEmpty(request.getJob_posting())).append("\n");
+        sb.append("- 지원 직무: ").append(nullToEmpty(request.getTarget_position())).append("\n");
+        sb.append("- 추가 요청사항: ").append(nullToEmpty(request.getAdditional_notes())).append("\n\n");
+
+        sb.append("[bio]\n");
+        sb.append("- 이름: ").append(nullToEmpty(userInfo.getName())).append("\n");
+        sb.append("- 학교/학과: ").append(schoolDept(userInfo)).append("\n");
+        sb.append("- 학년/학기: (").append(nullToEmpty(userInfo.getGrade())).append("학년 ")
+          .append(nullToEmpty(userInfo.getSemester())).append("학기)\n");
+        sb.append("- 한줄 자기소개: ").append(nullToEmpty(userInfo.getBio())).append("\n\n");
+
+        appendTechStackPlainText(sb, techStack);
+
+        sb.append("[github_repos]\n");
+        if (repos.getRepositories() != null) {
+            for (RepoEntryResponse r : repos.getRepositories()) {
+                if (r.getId() == null || !repoIds.contains(r.getId())) continue;
+                String title = r.getCustom_title() != null && !r.getCustom_title().isEmpty() ? r.getCustom_title() : r.getName();
+                if (title == null) title = "Repository";
+                String desc = r.getDescription() != null ? r.getDescription() : "";
+                String langStr = formatRepoLanguages(r);
+                if (!langStr.isEmpty()) langStr = " (" + langStr + ")";
+                String commitStr = (r.getCommit_count() != null) ? " " + r.getCommit_count() + " commits" : "";
+                String starStr = (r.getStargazers_count() != null) ? " " + r.getStargazers_count() + " stars" : "";
+                String forkStr = (r.getForks_count() != null) ? " " + r.getForks_count() + " forks" : "";
+                sb.append("- ").append(title).append(" - ").append(desc).append(langStr).append(commitStr).append(starStr).append(forkStr).append("\n");
+                if (r.getHtml_url() != null) sb.append(r.getHtml_url()).append("\n");
+            }
+        }
+        sb.append("\n");
+
+        sb.append("[mileage_list]\n");
+        if (mileage.getMileage() != null) {
+            for (MileageEntryResponse m : mileage.getMileage()) {
+                if (m.getId() == null || !mileageIds.contains(m.getId())) continue;
+                String sem = nullToEmpty(m.getSemester());
+                String cat = nullToEmpty(m.getCategoryName());
+                String sub = nullToEmpty(m.getSubitemName());
+                String add = m.getAdditional_info() != null && !m.getAdditional_info().isEmpty()
+                        ? m.getAdditional_info() : nullToEmpty(m.getDescription1());
+                sb.append("- ").append(sem).append(" ").append(cat).append(" - ").append(sub)
+                  .append(" · ").append(add).append("\n");
+            }
+        }
+        sb.append("\n");
+
+        sb.append("[activities]\n");
+        if (activities.getActivities() != null) {
+            for (ActivityResponse a : activities.getActivities()) {
+                if (a.getId() == null || !activityIds.contains(a.getId())) continue;
+                String title = nullToEmpty(a.getTitle());
+                String desc = nullToEmpty(a.getDescription());
+                String start = a.getStart_date() != null ? a.getStart_date().toString() : "";
+                String end = a.getEnd_date() != null ? a.getEnd_date().toString() : "";
+                sb.append("- ").append(title).append(" (").append(start).append(" ~ ").append(end).append(")");
+                if (!desc.isEmpty()) sb.append(" · ").append(desc);
+                sb.append("\n");
+            }
+        }
+        sb.append("\n");
+
+        sb.append("[contact]\n");
+        sb.append("- GitHub URL: ").append(githubUrl != null ? githubUrl : "").append("\n");
+        sb.append("- Email: ").append(email != null ? email : "").append("\n");
+
+        return PROMPT_HEAD + sb.toString() + PROMPT_TAIL;
+    }
+
+>>>>>>> Stashed changes
     private String nullToEmpty(Object o) {
         return o == null ? "" : String.valueOf(o);
     }
@@ -169,6 +261,25 @@ public class PortfolioHtmlExportService {
                     RepoLanguageDto.builder().name(r.getLanguage()).percentage(null).build());
         }
         return java.util.Collections.emptyList();
+    }
+
+    /** Plain-text tech stack block for LLM prompts ([tech_stack] section). */
+    private void appendTechStackPlainText(StringBuilder sb, TechStackResponse techStack) {
+        sb.append("[tech_stack]\n");
+        if (techStack.getDomains() != null) {
+            for (TechStackDomainResponse d : techStack.getDomains()) {
+                String dn = d.getName() != null ? d.getName() : "";
+                if (d.getTech_stacks() != null) {
+                    for (TechStackEntryResponse t : d.getTech_stacks()) {
+                        String line = t.getName() != null ? t.getName() : "";
+                        if (!dn.isEmpty()) line += " (" + dn + ")";
+                        if (t.getLevel() != null) line += " " + t.getLevel() + "%";
+                        sb.append("- ").append(line).append("\n");
+                    }
+                }
+            }
+        }
+        sb.append("\n");
     }
 
     /** Format languages for plain text (e.g. "Java (65.2%), Python (24.1%)" or "Java, Python"). */
@@ -218,20 +329,27 @@ public class PortfolioHtmlExportService {
             sb.append("  <section class=\"section\"><h2>About Me</h2><p>").append(bio).append("</p></section>\n");
         }
 
-        // Tech Stack
-        if (techStack.getTech_stack() != null && !techStack.getTech_stack().isEmpty()) {
-            sb.append("  <section class=\"section\"><h2>Tech Stack</h2><div class=\"tech-tags\">");
-            for (TechStackItem t : techStack.getTech_stack()) {
-                String techName = t.getName() != null ? t.getName() : "";
-                String title = techName;
-                if (t.getDomain() != null && !t.getDomain().isEmpty()) title += " · " + t.getDomain();
-                if (t.getLevel() != null) title += " · " + t.getLevel() + "%";
-                sb.append("<span class=\"tech-tag\" title=\"").append(escape(title)).append("\">")
-                  .append(escape(techName));
-                if (t.getLevel() != null) sb.append(" <small>(").append(t.getLevel()).append("%)</small>");
-                sb.append("</span>");
+        // Tech Stack (domain-grouped)
+        if (techStack.getDomains() != null && !techStack.getDomains().isEmpty()) {
+            sb.append("  <section class=\"section\"><h2>Tech Stack</h2>\n");
+            for (TechStackDomainResponse d : techStack.getDomains()) {
+                String dn = d.getName() != null ? d.getName() : "";
+                sb.append("    <h3 class=\"tech-domain-title\">").append(escape(dn)).append("</h3>\n");
+                sb.append("    <div class=\"tech-tags\">");
+                if (d.getTech_stacks() != null) {
+                    for (TechStackEntryResponse t : d.getTech_stacks()) {
+                        String techName = t.getName() != null ? t.getName() : "";
+                        String title = techName;
+                        if (t.getLevel() != null) title += " · " + t.getLevel() + "%";
+                        sb.append("<span class=\"tech-tag\" title=\"").append(escape(title)).append("\">")
+                          .append(escape(techName));
+                        if (t.getLevel() != null) sb.append(" <small>(").append(t.getLevel()).append("%)</small>");
+                        sb.append("</span>");
+                    }
+                }
+                sb.append("</div>\n");
             }
-            sb.append("</div></section>\n");
+            sb.append("  </section>\n");
         }
 
         // Projects (visible repos, max 3)
@@ -472,6 +590,7 @@ public class PortfolioHtmlExportService {
             + ".contact-icons a { color: #2563eb; text-decoration: none; margin: 0 8px; font-size: 0.9rem; } "
             + ".section { margin: 24px 0; } "
             + ".section h2 { font-size: 1.25rem; color: #1a1a2e; border-left: 4px solid #2563eb; padding-left: 12px; margin-bottom: 12px; } "
+            + ".section .tech-domain-title { font-size: 1rem; color: #334155; font-weight: 600; margin: 12px 0 8px; } "
             + ".tech-tags { display: flex; flex-wrap: wrap; gap: 8px; } "
             + ".tech-tag { background: #e0e7ff; color: #3730a3; padding: 4px 12px; border-radius: 999px; font-size: 0.85rem; } "
             + ".project-card { border-left: 4px solid #2563eb; padding: 12px 0 12px 16px; margin-bottom: 12px; } "

@@ -180,13 +180,19 @@ public class PortfolioController {
     }
 
     /**
-     * PUT /api/portfolio/tech-stack – 기술 스택 전체 교체.
-     * Body: { "tech_stack": ["Java", "Spring Boot", "Docker"] }
+     * PUT /api/portfolio/tech-stack – domains + tech stacks 전체 교체 (스냅샷).
+     * <ul>
+     *   <li>도메인만 추가: {@code tech_stacks}를 빈 배열 {@code []}로 보내거나 생략(또는 null).</li>
+     *   <li>도메인 전체 삭제: 요청 {@code domains} 배열에서 해당 도메인을 빼면 됨.</li>
+     *   <li>도메인은 유지하고 기술만 비우기: 그 도메인에 {@code "tech_stacks": []}.</li>
+     *   <li>개별 기술만 지우기: 해당 도메인의 {@code tech_stacks}에서 그 항목만 제거한 전체 목록을 보냄.</li>
+     * </ul>
+     * Body 예: { "domains": [ { "name": "Frontend", "order_index": 0, "tech_stacks": [ { "name": "React", "level": 73 } ] } ] }
      */
     @PutMapping("/tech-stack")
     public ResponseEntity<TechStackResponse> putTechStack(@Valid @RequestBody TechStackPutRequest request) {
         Users user = getCurrentUser();
-        return ResponseEntity.ok(portfolioService.putTechStack(user, request.getTech_stack()));
+        return ResponseEntity.ok(portfolioService.putTechStack(user, request != null ? request : new TechStackPutRequest()));
     }
 
     /**
