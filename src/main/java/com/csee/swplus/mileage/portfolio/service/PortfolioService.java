@@ -15,15 +15,22 @@ import com.csee.swplus.mileage.portfolio.dto.RepoLanguageDto;
 import com.csee.swplus.mileage.portfolio.dto.RepoPatchRequest;
 import com.csee.swplus.mileage.portfolio.dto.RepositoriesResponse;
 import com.csee.swplus.mileage.portfolio.dto.SettingsResponse;
-import com.csee.swplus.mileage.portfolio.dto.TechStackItem;
+import com.csee.swplus.mileage.portfolio.dto.TechStackDomainPutDto;
+import com.csee.swplus.mileage.portfolio.dto.TechStackDomainResponse;
+import com.csee.swplus.mileage.portfolio.dto.TechStackEntryPutDto;
+import com.csee.swplus.mileage.portfolio.dto.TechStackEntryResponse;
+import com.csee.swplus.mileage.portfolio.dto.TechStackPutRequest;
 import com.csee.swplus.mileage.portfolio.dto.TechStackResponse;
 import com.csee.swplus.mileage.portfolio.dto.UserInfoResponse;
 import com.csee.swplus.mileage.etcSubitem.repository.EtcSubitemRepository;
 import com.csee.swplus.mileage.portfolio.entity.Portfolio;
 import com.csee.swplus.mileage.portfolio.entity.PortfolioActivity;
+import com.csee.swplus.mileage.portfolio.entity.PortfolioDomain;
+import com.csee.swplus.mileage.portfolio.entity.PortfolioTechStackEntry;
 import com.csee.swplus.mileage.portfolio.entity.PortfolioMileageEntry;
 import com.csee.swplus.mileage.portfolio.entity.PortfolioRepoEntry;
 import com.csee.swplus.mileage.portfolio.repository.PortfolioActivityRepository;
+import com.csee.swplus.mileage.portfolio.repository.PortfolioDomainRepository;
 import com.csee.swplus.mileage.portfolio.repository.PortfolioMileageEntryRepository;
 import com.csee.swplus.mileage.portfolio.repository.PortfolioRepository;
 import com.csee.swplus.mileage.portfolio.repository.PortfolioRepoEntryRepository;
@@ -55,6 +62,7 @@ import java.util.stream.Collectors;
 public class PortfolioService {
 
     private final PortfolioRepository portfolioRepository;
+    private final PortfolioDomainRepository portfolioDomainRepository;
     private final PortfolioRepoEntryRepository portfolioRepoEntryRepository;
     private final PortfolioActivityRepository portfolioActivityRepository;
     private final PortfolioMileageEntryRepository portfolioMileageEntryRepository;
@@ -203,23 +211,81 @@ public class PortfolioService {
     }
 
     /**
-     * GET /api/portfolio/tech-stack – 기술 스택 목록.
+     * GET /api/portfolio/tech-stack – domains + tech stacks (relational).
      */
     public TechStackResponse getTechStack(Users user) {
-        Portfolio portfolio = getOrCreatePortfolio(user);
-        return TechStackResponse.builder()
-                .tech_stack(portfolio.getTechStack() != null ? portfolio.getTechStack() : java.util.Collections.emptyList())
-                .build();
+        getOrCreatePortfolio(user);
+        String snum = user.getUniqueId();
+        java.util.List<PortfolioDomain> domains = portfolioDomainRepository.findBySnumOrderByOrderIndexAscIdAsc(snum);
+        java.util.List<TechStackDomainResponse> out = new java.util.ArrayList<>();
+        for (PortfolioDomain d : domains) {
+            java.util.List<TechStackEntryResponse> entries = new java.util.ArrayList<>();
+            if (d.getTechStacks() != null) {
+                for (PortfolioTechStackEntry t : d.getTechStacks()) {
+                    entries.add(TechStackEntryResponse.builder()
+                            .name(t.getName())
+                            .level(t.getLevel())
+                            .build());
+                }
+            }
+            out.add(TechStackDomainResponse.builder()
+                    .id(d.getId())
+                    .name(d.getName())
+                    .order_index(d.getOrderIndex())
+                    .tech_stacks(entries)
+                    .build());
+        }
+        return TechStackResponse.builder().domains(out).build();
     }
 
     /**
-     * PUT /api/portfolio/tech-stack – 기술 스택 전체 교체 (batch sync).
+     * PUT /api/portfolio/tech-stack – full replace of domains and tech stacks.
      */
-    public TechStackResponse putTechStack(Users user, java.util.List<TechStackItem> techStack) {
-        Portfolio portfolio = getOrCreatePortfolio(user);
-        portfolio.setTechStack(techStack != null ? techStack : java.util.Collections.emptyList());
-        portfolioRepository.save(portfolio);
+    public TechStackResponse putTechStack(Users user, TechStackPutRequest request) {
+        getOrCreatePortfolio(user);
+        String snum = user.getUniqueId();
+        portfolioDomainRepository.deleteBySnum(snum);
+        portfolioDomainRepository.flush();
+
+        java.util.List<TechStackDomainPutDto> domains =
+                request != null && request.getDomains() != null ? request.getDomains() : java.util.Collections.emptyList();
+        int fallbackOrder = 0;
+        for (TechStackDomainPutDto dto : domains) {
+            if (dto == null || dto.getName() == null || dto.getName().trim().isEmpty()) {
+                continue;
+            }
+            int orderIndex = dto.getOrder_index() != null ? dto.getOrder_index() : fallbackOrder++;
+            PortfolioDomain domain = PortfolioDomain.builder()
+                    .snum(snum)
+                    .name(dto.getName().trim())
+                    .orderIndex(orderIndex)
+                    .build();
+            java.util.List<PortfolioTechStackEntry> techs = new java.util.ArrayList<>();
+            if (dto.getTech_stacks() != null) {
+                for (TechStackEntryPutDto t : dto.getTech_stacks()) {
+                    if (t == null || t.getName() == null || t.getName().trim().isEmpty()) {
+                        continue;
+                    }
+                    techs.add(PortfolioTechStackEntry.builder()
+                            .snum(snum)
+                            .domain(domain)
+                            .name(t.getName().trim())
+                            .level(clampLevel1To100(t.getLevel()))
+                            .build());
+                }
+            }
+            domain.setTechStacks(techs);
+            portfolioDomainRepository.save(domain);
+        }
         return getTechStack(user);
+    }
+
+    /** Single 1–100 score (no separate {@code score} column in DB). */
+    private static int clampLevel1To100(Integer level) {
+        if (level == null) {
+            return 1;
+        }
+        return Math.max(1, Math.min(100, level));
     }
 
     /**

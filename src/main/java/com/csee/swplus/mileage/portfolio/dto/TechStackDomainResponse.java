@@ -8,13 +8,16 @@ import lombok.NoArgsConstructor;
 import java.util.List;
 
 /**
- * GET /api/portfolio/tech-stack — domain-grouped tech stacks.
+ * Domain with nested tech stacks (GET response).
  */
 @Getter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class TechStackResponse {
+public class TechStackDomainResponse {
 
-    private List<TechStackDomainResponse> domains;
+    private Integer id;
+    private String name;
+    private Integer order_index;
+    private List<TechStackEntryResponse> tech_stacks;
 }

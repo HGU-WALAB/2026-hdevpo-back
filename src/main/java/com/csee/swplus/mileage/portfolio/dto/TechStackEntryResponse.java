@@ -5,16 +5,16 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-import java.util.List;
-
 /**
- * GET /api/portfolio/tech-stack — domain-grouped tech stacks.
+ * One technology under a domain (GET response).
  */
 @Getter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class TechStackResponse {
+public class TechStackEntryResponse {
 
-    private List<TechStackDomainResponse> domains;
+    private String name;
+    /** Proficiency 1–100. */
+    private Integer level;
 }

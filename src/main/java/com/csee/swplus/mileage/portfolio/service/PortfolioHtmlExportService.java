@@ -83,16 +83,7 @@ public class PortfolioHtmlExportService {
           .append(nullToEmpty(userInfo.getSemester())).append("학기)\n");
         sb.append("- 한줄 자기소개: ").append(nullToEmpty(userInfo.getBio())).append("\n\n");
 
-        sb.append("[tech_stack]\n");
-        if (techStack.getTech_stack() != null) {
-            for (TechStackItem t : techStack.getTech_stack()) {
-                String line = t.getName() != null ? t.getName() : "";
-                if (t.getDomain() != null && !t.getDomain().isEmpty()) line += " (" + t.getDomain() + ")";
-                if (t.getLevel() != null) line += " " + t.getLevel() + "%";
-                sb.append("- ").append(line).append("\n");
-            }
-        }
-        sb.append("\n");
+        appendTechStackPlainText(sb, techStack);
 
         sb.append("[github_repos]\n");
         if (repos.getRepositories() != null) {
@@ -196,16 +187,7 @@ public class PortfolioHtmlExportService {
           .append(nullToEmpty(userInfo.getSemester())).append("학기)\n");
         sb.append("- 한줄 자기소개: ").append(nullToEmpty(userInfo.getBio())).append("\n\n");
 
-        sb.append("[tech_stack]\n");
-        if (techStack.getTech_stack() != null) {
-            for (TechStackItem t : techStack.getTech_stack()) {
-                String line = t.getName() != null ? t.getName() : "";
-                if (t.getDomain() != null && !t.getDomain().isEmpty()) line += " (" + t.getDomain() + ")";
-                if (t.getLevel() != null) line += " " + t.getLevel() + "%";
-                sb.append("- ").append(line).append("\n");
-            }
-        }
-        sb.append("\n");
+        appendTechStackPlainText(sb, techStack);
 
         sb.append("[github_repos]\n");
         if (repos.getRepositories() != null) {
@@ -278,6 +260,25 @@ public class PortfolioHtmlExportService {
         return java.util.Collections.emptyList();
     }
 
+    /** Plain-text tech stack block for LLM prompts ([tech_stack] section). */
+    private void appendTechStackPlainText(StringBuilder sb, TechStackResponse techStack) {
+        sb.append("[tech_stack]\n");
+        if (techStack.getDomains() != null) {
+            for (TechStackDomainResponse d : techStack.getDomains()) {
+                String dn = d.getName() != null ? d.getName() : "";
+                if (d.getTech_stacks() != null) {
+                    for (TechStackEntryResponse t : d.getTech_stacks()) {
+                        String line = t.getName() != null ? t.getName() : "";
+                        if (!dn.isEmpty()) line += " (" + dn + ")";
+                        if (t.getLevel() != null) line += " " + t.getLevel() + "%";
+                        sb.append("- ").append(line).append("\n");
+                    }
+                }
+            }
+        }
+        sb.append("\n");
+    }
+
     /** Format languages for plain text (e.g. "Java (65.2%), Python (24.1%)" or "Java, Python"). */
     private String formatRepoLanguages(RepoEntryResponse r) {
         java.util.List<RepoLanguageDto> langList = getRepoLanguagesForDisplay(r);
@@ -325,20 +326,27 @@ public class PortfolioHtmlExportService {
             sb.append("  <section class=\"section\"><h2>About Me</h2><p>").append(bio).append("</p></section>\n");
         }
 
-        // Tech Stack
-        if (techStack.getTech_stack() != null && !techStack.getTech_stack().isEmpty()) {
-            sb.append("  <section class=\"section\"><h2>Tech Stack</h2><div class=\"tech-tags\">");
-            for (TechStackItem t : techStack.getTech_stack()) {
-                String techName = t.getName() != null ? t.getName() : "";
-                String title = techName;
-                if (t.getDomain() != null && !t.getDomain().isEmpty()) title += " · " + t.getDomain();
-                if (t.getLevel() != null) title += " · " + t.getLevel() + "%";
-                sb.append("<span class=\"tech-tag\" title=\"").append(escape(title)).append("\">")
-                  .append(escape(techName));
-                if (t.getLevel() != null) sb.append(" <small>(").append(t.getLevel()).append("%)</small>");
-                sb.append("</span>");
+        // Tech Stack (domain-grouped)
+        if (techStack.getDomains() != null && !techStack.getDomains().isEmpty()) {
+            sb.append("  <section class=\"section\"><h2>Tech Stack</h2>\n");
+            for (TechStackDomainResponse d : techStack.getDomains()) {
+                String dn = d.getName() != null ? d.getName() : "";
+                sb.append("    <h3 class=\"tech-domain-title\">").append(escape(dn)).append("</h3>\n");
+                sb.append("    <div class=\"tech-tags\">");
+                if (d.getTech_stacks() != null) {
+                    for (TechStackEntryResponse t : d.getTech_stacks()) {
+                        String techName = t.getName() != null ? t.getName() : "";
+                        String title = techName;
+                        if (t.getLevel() != null) title += " · " + t.getLevel() + "%";
+                        sb.append("<span class=\"tech-tag\" title=\"").append(escape(title)).append("\">")
+                          .append(escape(techName));
+                        if (t.getLevel() != null) sb.append(" <small>(").append(t.getLevel()).append("%)</small>");
+                        sb.append("</span>");
+                    }
+                }
+                sb.append("</div>\n");
             }
-            sb.append("</div></section>\n");
+            sb.append("  </section>\n");
         }
 
         // Projects (visible repos, max 3)
@@ -579,6 +587,7 @@ public class PortfolioHtmlExportService {
             + ".contact-icons a { color: #2563eb; text-decoration: none; margin: 0 8px; font-size: 0.9rem; } "
             + ".section { margin: 24px 0; } "
             + ".section h2 { font-size: 1.25rem; color: #1a1a2e; border-left: 4px solid #2563eb; padding-left: 12px; margin-bottom: 12px; } "
+            + ".section .tech-domain-title { font-size: 1rem; color: #334155; font-weight: 600; margin: 12px 0 8px; } "
             + ".tech-tags { display: flex; flex-wrap: wrap; gap: 8px; } "
             + ".tech-tag { background: #e0e7ff; color: #3730a3; padding: 4px 12px; border-radius: 999px; font-size: 0.85rem; } "
             + ".project-card { border-left: 4px solid #2563eb; padding: 12px 0 12px 16px; margin-bottom: 12px; } "

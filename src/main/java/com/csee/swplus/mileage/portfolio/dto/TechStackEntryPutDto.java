@@ -5,16 +5,16 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import java.util.List;
-
 /**
- * PUT /api/portfolio/tech-stack — full replace of domains and tech stacks.
+ * One technology in PUT body.
  */
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class TechStackPutRequest {
+public class TechStackEntryPutDto {
 
-    private List<TechStackDomainPutDto> domains;
+    private String name;
+    /** Proficiency 1–100. */
+    private Integer level;
 }
