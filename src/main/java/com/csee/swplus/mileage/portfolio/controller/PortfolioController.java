@@ -1,11 +1,6 @@
 package com.csee.swplus.mileage.portfolio.controller;
 
 import com.csee.swplus.mileage.auth.service.AuthService;
-import com.csee.swplus.mileage.portfolio.dto.ActivitiesResponse;
-import com.csee.swplus.mileage.portfolio.dto.ActivityPatchItemRequest;
-import com.csee.swplus.mileage.portfolio.dto.ActivityPatchRequest;
-import com.csee.swplus.mileage.portfolio.dto.ActivityRequest;
-import com.csee.swplus.mileage.portfolio.dto.ActivityResponse;
 import com.csee.swplus.mileage.portfolio.dto.MileageEntryRequest;
 import com.csee.swplus.mileage.portfolio.dto.MileageEntryResponse;
 import com.csee.swplus.mileage.portfolio.dto.MileageLinkRequest;
@@ -33,6 +28,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -47,14 +43,16 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Portfolio "내 정보 모아보기" API (repos, activities, mileage, settings, export).
+ * Portfolio "내 정보 모아보기" API (프로필, 기술스택, 레포, 마일리지, 설정, 내보내기).
+ * 활동(activities)은 {@link PortfolioActivitiesController} 참고.
  * Base path: /api/portfolio
  */
 @RestController
 @RequestMapping("/api/portfolio")
 @RequiredArgsConstructor
 @Slf4j
-@Tag(name = "Portfolio", description = "내 정보 모아보기 (레포, 활동, 마일리지, 설정, HTML/Prompt 내보내기)")
+@Tag(name = "Portfolio", description = "내 정보 모아보기 — 프로필, 기술스택, 레포, 마일리지, 설정, 내보내기. "
+        + "활동(activities) API는 Swagger에서 「Portfolio — Activities」 그룹을 참고하세요.")
 public class PortfolioController {
 
     private final AuthService authService;
@@ -68,6 +66,7 @@ public class PortfolioController {
      * GET /api/portfolio/user-info – 기본 정보 (이름, 학교, 전공, 학년, 학기, 소개글, 프로필 이미지).
      */
     @GetMapping("/user-info")
+    @Operation(summary = "기본 프로필 조회")
     public ResponseEntity<UserInfoResponse> getUserInfo() {
         Users user = getCurrentUser();
         UserInfoResponse body = portfolioService.getUserInfo(user);
@@ -79,6 +78,7 @@ public class PortfolioController {
      * Body: bio (text, optional), profile_image (file, optional)
      */
     @PatchMapping(value = "/user-info", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "프로필 수정 (multipart)", description = "bio, profile_image 파일")
     public ResponseEntity<UserInfoResponse> patchUserInfoMultipart(
             @RequestParam(value = "bio", required = false) String bio,
             @RequestPart(value = "profile_image", required = false) MultipartFile profileImage) {
@@ -138,6 +138,7 @@ public class PortfolioController {
      * Use this for updating bio only or setting/clearing profile_image_url without file upload.
      */
     @PatchMapping(value = "/user-info", consumes = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "프로필 수정 (JSON)", description = "bio, profile_image_url")
     public ResponseEntity<UserInfoResponse> patchUserInfoJson(@Valid @RequestBody UserInfoPatchRequest request) {
         Users user = getCurrentUser();
         UserInfoResponse body = portfolioService.updateBio(user, request.getBio(), request.getProfile_image_url());
@@ -148,6 +149,7 @@ public class PortfolioController {
      * GET /api/portfolio/user-info/image/{filename} – 프로필 이미지 조회.
      */
     @GetMapping("/user-info/image/{filename}")
+    @Operation(summary = "프로필 이미지 파일 조회")
     public ResponseEntity<Resource> getProfileImage(@PathVariable String filename) {
         try {
             Path filePath = Paths.get(profileUploadDir).resolve(filename).normalize();
@@ -176,6 +178,7 @@ public class PortfolioController {
      * GET /api/portfolio/tech-stack – 기술 스택 목록.
      */
     @GetMapping("/tech-stack")
+    @Operation(summary = "기술 스택 조회", description = "domains + tech_stacks (level 1–100)")
     public ResponseEntity<TechStackResponse> getTechStack() {
         Users user = getCurrentUser();
         return ResponseEntity.ok(portfolioService.getTechStack(user));
@@ -192,6 +195,7 @@ public class PortfolioController {
      * Body 예: { "domains": [ { "name": "Frontend", "order_index": 0, "tech_stacks": [ { "name": "React", "level": 73 } ] } ] }
      */
     @PutMapping("/tech-stack")
+    @Operation(summary = "기술 스택 전체 교체", description = "PUT 스냅샷 — domains 배열 전체")
     public ResponseEntity<TechStackResponse> putTechStack(@Valid @RequestBody TechStackPutRequest request) {
         Users user = getCurrentUser();
         return ResponseEntity.ok(portfolioService.putTechStack(user, request != null ? request : new TechStackPutRequest()));
@@ -204,6 +208,7 @@ public class PortfolioController {
      * ?affiliation=owner,collaborator,organization_member (requires stored token for private/org).
      */
     @GetMapping("/repositories")
+    @Operation(summary = "GitHub 레포 목록", description = "페이지·필터·정렬 쿼리 지원")
     public ResponseEntity<RepositoriesResponse> getRepositories(
             @RequestParam(value = "page", required = false) Integer page,
             @RequestParam(value = "per_page", required = false) Integer perPage,
@@ -221,6 +226,7 @@ public class PortfolioController {
      * Body: [ { "repo_id": 123, "custom_title": "Project A", "is_visible": true }, ... ]
      */
     @PutMapping("/repositories")
+    @Operation(summary = "레포 표시 설정 일괄 동기화")
     public ResponseEntity<RepositoriesResponse> putRepositories(@Valid @RequestBody List<RepoEntryRequest> request) {
         Users user = getCurrentUser();
         return ResponseEntity.ok(portfolioService.putRepositories(user, request));
@@ -231,6 +237,7 @@ public class PortfolioController {
      * Body 예시: { "custom_title": "New title", "is_visible": true }
      */
     @PatchMapping("/repositories/{id}")
+    @Operation(summary = "단일 레포 설정 수정")
     public ResponseEntity<RepoEntryResponse> patchRepository(
             @PathVariable Long id,
             @RequestBody RepoPatchRequest request) {
@@ -240,67 +247,10 @@ public class PortfolioController {
     }
 
     /**
-     * GET /api/portfolio/activities – 활동 목록. Optional: ?category=activity&category=project to filter (default: full list).
-     */
-    @GetMapping("/activities")
-    public ResponseEntity<ActivitiesResponse> getActivities(
-            @RequestParam(value = "category", required = false) List<String> categories) {
-        Users user = getCurrentUser();
-        return ResponseEntity.ok(portfolioService.getActivities(user, categories));
-    }
-
-    /**
-     * POST /api/portfolio/activities – 활동 추가 (반환 id로 이후 PUT).
-     * Body: { "title": "...", "description": "...", "start_date": "2024-01-01", "end_date": "2024-06-30" }
-     */
-    @PostMapping("/activities")
-    public ResponseEntity<ActivityResponse> postActivity(@Valid @RequestBody ActivityRequest request) {
-        Users user = getCurrentUser();
-        return ResponseEntity.ok(portfolioService.createActivity(user, request));
-    }
-
-    /**
-     * PUT /api/portfolio/activities/{id} – 활동 전체 수정.
-     */
-    @PutMapping("/activities/{id}")
-    public ResponseEntity<ActivityResponse> putActivity(@PathVariable Long id, @Valid @RequestBody ActivityRequest request) {
-        Users user = getCurrentUser();
-        return ResponseEntity.ok(portfolioService.updateActivity(user, id, request));
-    }
-
-    /**
-     * PATCH /api/portfolio/activities/{id} – 활동 일부 수정 (보내진 필드만 반영). Body: { "category": "project" }, { "title": "..." }, etc.
-     */
-    @PatchMapping("/activities/{id}")
-    public ResponseEntity<ActivityResponse> patchActivity(@PathVariable Long id, @RequestBody ActivityPatchRequest request) {
-        Users user = getCurrentUser();
-        return ResponseEntity.ok(portfolioService.patchActivity(user, id, request != null ? request : new ActivityPatchRequest()));
-    }
-
-    /**
-     * PATCH /api/portfolio/activities – 전체 목록 일부 수정. Body: [ { "id": 1, "category": "project" }, { "id": 2, "title": "..." }, ... ]
-     * 각 항목은 id로 식별되며, 보내진 필드만 반영됩니다.
-     */
-    @PatchMapping("/activities")
-    public ResponseEntity<ActivitiesResponse> patchActivities(@RequestBody List<ActivityPatchItemRequest> request) {
-        Users user = getCurrentUser();
-        return ResponseEntity.ok(portfolioService.patchActivities(user, request != null ? request : java.util.Collections.emptyList()));
-    }
-
-    /**
-     * DELETE /api/portfolio/activities/{id} – 활동 삭제.
-     */
-    @DeleteMapping("/activities/{id}")
-    public ResponseEntity<Void> deleteActivity(@PathVariable Long id) {
-        Users user = getCurrentUser();
-        portfolioService.deleteActivity(user, id);
-        return ResponseEntity.noContent().build();
-    }
-
-    /**
      * GET /api/portfolio/mileage – 연결된 마일리지 목록.
      */
     @GetMapping("/mileage")
+    @Operation(summary = "연결된 마일리지 목록")
     public ResponseEntity<MileageListResponse> getMileage() {
         Users user = getCurrentUser();
         return ResponseEntity.ok(portfolioService.getMileageList(user));
@@ -311,6 +261,7 @@ public class PortfolioController {
      * Body: [ { "mileage_id": 789, "additional_info": "설명" }, ... ]
      */
     @PutMapping("/mileage")
+    @Operation(summary = "마일리지 연결 목록 전체 교체")
     public ResponseEntity<MileageListResponse> putMileage(@Valid @RequestBody List<MileageEntryRequest> request) {
         Users user = getCurrentUser();
         return ResponseEntity.ok(portfolioService.putMileageList(user, request != null ? request : java.util.Collections.emptyList()));
@@ -321,6 +272,7 @@ public class PortfolioController {
      * Body: { "mileage_id": 789, "additional_info": "상세 설명" }
      */
     @PostMapping("/mileage")
+    @Operation(summary = "마일리지 연결 추가")
     public ResponseEntity<MileageEntryResponse> postMileage(@Valid @RequestBody MileageLinkRequest request) {
         Users user = getCurrentUser();
         return ResponseEntity.ok(portfolioService.linkMileage(user, request));
@@ -331,6 +283,7 @@ public class PortfolioController {
      * Body: { "additional_info": "내용 수정" }
      */
     @PutMapping("/mileage/{id}")
+    @Operation(summary = "마일리지 연결 추가 설명 수정")
     public ResponseEntity<MileageEntryResponse> putMileage(@PathVariable Long id, @RequestBody MileageUpdateRequest request) {
         Users user = getCurrentUser();
         return ResponseEntity.ok(portfolioService.updateMileageEntry(user, id, request != null ? request.getAdditional_info() : null));
@@ -340,6 +293,7 @@ public class PortfolioController {
      * DELETE /api/portfolio/mileage/{id} – 연결 해제 (원본 마일리지는 삭제하지 않음).
      */
     @DeleteMapping("/mileage/{id}")
+    @Operation(summary = "마일리지 연결 해제")
     public ResponseEntity<Void> deleteMileage(@PathVariable Long id) {
         Users user = getCurrentUser();
         portfolioService.unlinkMileage(user, id);
@@ -350,6 +304,7 @@ public class PortfolioController {
      * GET /api/portfolio/export/html – 포트폴리오 HTML 단일 파일 export (인쇄용, 공유용).
      */
     @GetMapping(value = "/export/html", produces = MediaType.TEXT_HTML_VALUE)
+    @Operation(summary = "포트폴리오 HTML 내보내기")
     public ResponseEntity<String> exportHtml() {
         Users user = getCurrentUser();
         String html = htmlExportService.generateHtml(user);
@@ -363,6 +318,7 @@ public class PortfolioController {
      * 풀 테스트용 – 이 텍스트를 그대로 LLM에 붙여 넣어 포트폴리오 HTML 생성 가능.
      */
     @GetMapping(value = "/export/prompt", produces = MediaType.TEXT_PLAIN_VALUE)
+    @Operation(summary = "LLM용 전체 프롬프트(STEP 2 데이터 포함)")
     public ResponseEntity<String> exportPrompt() {
         Users user = getCurrentUser();
         String fullPrompt = htmlExportService.buildFullPrompt(user);
@@ -375,6 +331,7 @@ public class PortfolioController {
      * GET /api/portfolio/settings – 섹션 순서 (유저 정보는 상단 고정).
      */
     @GetMapping("/settings")
+    @Operation(summary = "섹션 순서 설정 조회")
     public ResponseEntity<SettingsResponse> getSettings() {
         Users user = getCurrentUser();
         return ResponseEntity.ok(portfolioService.getSettings(user));
@@ -385,6 +342,7 @@ public class PortfolioController {
      * Body: { "section_order": ["tech", "repo", "activities", "mileage"] }
      */
     @PutMapping("/settings")
+    @Operation(summary = "섹션 순서 설정 저장")
     public ResponseEntity<SettingsResponse> putSettings(@RequestBody SettingsPutRequest request) {
         Users user = getCurrentUser();
         return ResponseEntity.ok(portfolioService.putSettings(user, request != null ? request.getSection_order() : null));
