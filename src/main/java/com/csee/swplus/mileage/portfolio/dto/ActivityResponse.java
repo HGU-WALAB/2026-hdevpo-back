@@ -6,6 +6,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
+import java.util.List;
 
 /**
  * Single activity in GET list or POST/PUT response.
@@ -24,4 +25,7 @@ public class ActivityResponse {
     /** Category: "activity", "project", "certificate", "camp", "other", etc. */
     private String category;
     private Integer display_order;
+
+    private String url;
+    private List<String> tags;
 }

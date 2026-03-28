@@ -6,6 +6,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.LocalDate;
+import java.util.List;
 
 /**
  * One item in PATCH /api/portfolio/activities (full list).
@@ -26,4 +27,7 @@ public class ActivityPatchItemRequest {
     private LocalDate start_date;
     private LocalDate end_date;
     private String category;
+
+    private String url;
+    private List<String> tags;
 }
