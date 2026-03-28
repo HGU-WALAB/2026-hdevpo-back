@@ -7,7 +7,9 @@ import lombok.Setter;
 
 import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
+import javax.validation.constraints.Size;
 import java.time.LocalDate;
+import java.util.List;
 
 /**
  * POST /api/portfolio/activities (create) and PUT /api/portfolio/activities/{id} (update).
@@ -30,4 +32,11 @@ public class ActivityRequest {
 
     /** Category: "activity", "project", "certificate", "camp", "other", etc. */
     private String category;
+
+    /** Optional external link. */
+    @Size(max = 2048)
+    private String url;
+
+    /** Optional tags (e.g. for future filter/sort). */
+    private List<String> tags;
 }

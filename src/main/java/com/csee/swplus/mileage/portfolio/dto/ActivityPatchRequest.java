@@ -6,6 +6,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.LocalDate;
+import java.util.List;
 
 /**
  * PATCH /api/portfolio/activities/{id} – partial update (only non-null fields are applied).
@@ -22,4 +23,10 @@ public class ActivityPatchRequest {
     private LocalDate start_date;
     private LocalDate end_date;
     private String category;
+
+    /** Null = leave unchanged; empty string clears. */
+    private String url;
+
+    /** Null = leave unchanged; empty list clears tags. */
+    private List<String> tags;
 }

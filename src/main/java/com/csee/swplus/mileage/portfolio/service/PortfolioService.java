@@ -621,6 +621,8 @@ public class PortfolioService {
                 .portfolio(portfolio)
                 .title(request.getTitle())
                 .description(request.getDescription())
+                .url(normalizeActivityUrl(request.getUrl()))
+                .tags(normalizeActivityTags(request.getTags()))
                 .startDate(request.getStart_date())
                 .endDate(request.getEnd_date())
                 .category(request.getCategory())
@@ -639,6 +641,8 @@ public class PortfolioService {
                 .orElseThrow(() -> new DoNotExistException("해당 활동을 찾을 수 없습니다."));
         activity.setTitle(request.getTitle());
         activity.setDescription(request.getDescription());
+        activity.setUrl(normalizeActivityUrl(request.getUrl()));
+        activity.setTags(normalizeActivityTags(request.getTags()));
         activity.setStartDate(request.getStart_date());
         activity.setEndDate(request.getEnd_date());
         activity.setCategory(request.getCategory());
@@ -668,6 +672,12 @@ public class PortfolioService {
         if (request.getCategory() != null) {
             activity.setCategory(request.getCategory());
         }
+        if (request.getUrl() != null) {
+            activity.setUrl(normalizeActivityUrl(request.getUrl()));
+        }
+        if (request.getTags() != null) {
+            activity.setTags(normalizeActivityTags(request.getTags()));
+        }
         portfolioActivityRepository.save(activity);
         return toActivityResponse(activity);
     }
@@ -689,6 +699,8 @@ public class PortfolioService {
             if (item.getStart_date() != null) activity.setStartDate(item.getStart_date());
             if (item.getEnd_date() != null) activity.setEndDate(item.getEnd_date());
             if (item.getCategory() != null) activity.setCategory(item.getCategory());
+            if (item.getUrl() != null) activity.setUrl(normalizeActivityUrl(item.getUrl()));
+            if (item.getTags() != null) activity.setTags(normalizeActivityTags(item.getTags()));
             portfolioActivityRepository.save(activity);
         }
         return getActivities(user, null);
@@ -713,7 +725,35 @@ public class PortfolioService {
                 .end_date(a.getEndDate())
                 .category(a.getCategory())
                 .display_order(a.getDisplayOrder())
+                .url(a.getUrl())
+                .tags(a.getTags() != null ? new ArrayList<>(a.getTags()) : new ArrayList<>())
                 .build();
+    }
+
+    private static String normalizeActivityUrl(String url) {
+        if (url == null) {
+            return null;
+        }
+        String t = url.trim();
+        return t.isEmpty() ? null : t;
+    }
+
+    /** Trim, drop empties, preserve first-seen order (case-sensitive). */
+    private static List<String> normalizeActivityTags(List<String> tags) {
+        if (tags == null) {
+            return new ArrayList<>();
+        }
+        LinkedHashSet<String> seen = new LinkedHashSet<>();
+        for (String s : tags) {
+            if (s == null) {
+                continue;
+            }
+            String t = s.trim();
+            if (!t.isEmpty()) {
+                seen.add(t);
+            }
+        }
+        return new ArrayList<>(seen);
     }
 
     /**

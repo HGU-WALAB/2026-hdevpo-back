@@ -3,8 +3,12 @@ package com.csee.swplus.mileage.portfolio.entity;
 import com.csee.swplus.mileage.base.entity.BaseTime;
 import lombok.*;
 
+import com.csee.swplus.mileage.portfolio.converter.StringListJsonConverter;
+
 import javax.persistence.*;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * User-defined activity (e.g. club, role).
@@ -32,6 +36,16 @@ public class PortfolioActivity extends BaseTime {
 
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
+
+    /** Optional link (e.g. club site, certificate page). */
+    @Column(name = "url", length = 2048)
+    private String url;
+
+    /** Tags for future filter/sort; stored as JSON array in DB. */
+    @Convert(converter = StringListJsonConverter.class)
+    @Column(name = "tags", columnDefinition = "TEXT")
+    @Builder.Default
+    private List<String> tags = new ArrayList<>();
 
     @Column(name = "start_date", nullable = false)
     private LocalDate startDate;

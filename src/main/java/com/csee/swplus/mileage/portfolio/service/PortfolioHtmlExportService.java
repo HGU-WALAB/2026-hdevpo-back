@@ -125,6 +125,12 @@ public class PortfolioHtmlExportService {
                 String end = a.getEnd_date() != null ? a.getEnd_date().toString() : "";
                 sb.append("- ").append(title).append(" (").append(start).append(" ~ ").append(end).append(")");
                 if (!desc.isEmpty()) sb.append(" · ").append(desc);
+                if (a.getUrl() != null && !a.getUrl().trim().isEmpty()) {
+                    sb.append(" · URL: ").append(a.getUrl().trim());
+                }
+                if (a.getTags() != null && !a.getTags().isEmpty()) {
+                    sb.append(" · tags: ").append(String.join(", ", a.getTags()));
+                }
                 sb.append("\n");
             }
         }
@@ -232,6 +238,12 @@ public class PortfolioHtmlExportService {
                 String end = a.getEnd_date() != null ? a.getEnd_date().toString() : "";
                 sb.append("- ").append(title).append(" (").append(start).append(" ~ ").append(end).append(")");
                 if (!desc.isEmpty()) sb.append(" · ").append(desc);
+                if (a.getUrl() != null && !a.getUrl().trim().isEmpty()) {
+                    sb.append(" · URL: ").append(a.getUrl().trim());
+                }
+                if (a.getTags() != null && !a.getTags().isEmpty()) {
+                    sb.append(" · tags: ").append(String.join(", ", a.getTags()));
+                }
                 sb.append("\n");
             }
         }
@@ -410,8 +422,16 @@ public class PortfolioHtmlExportService {
                 String end = a.getEnd_date() != null ? a.getEnd_date().toString() : "";
                 String range = start + " ~ " + end;
                 sb.append("<div class=\"timeline-item\">");
-                sb.append("<h3>").append(escape(title)).append("</h3>");
+                if (a.getUrl() != null && !a.getUrl().trim().isEmpty()) {
+                    sb.append("<h3><a href=\"").append(escape(a.getUrl().trim())).append("\" target=\"_blank\" rel=\"noopener noreferrer\">")
+                            .append(escape(title)).append("</a></h3>");
+                } else {
+                    sb.append("<h3>").append(escape(title)).append("</h3>");
+                }
                 sb.append("<span class=\"date\">").append(escape(range)).append("</span>");
+                if (a.getTags() != null && !a.getTags().isEmpty()) {
+                    sb.append("<p class=\"activity-tags\">").append(escape(String.join(" · ", a.getTags()))).append("</p>");
+                }
                 if (!desc.isEmpty()) sb.append("<p>").append(escape(desc)).append("</p>");
                 sb.append("</div>");
             }
@@ -599,6 +619,8 @@ public class PortfolioHtmlExportService {
             + ".timeline-item { margin-bottom: 16px; } "
             + ".timeline-item h3 { font-size: 1rem; } "
             + ".timeline-item .date { font-size: 0.85rem; color: #64748b; } "
+            + ".timeline-item .activity-tags { font-size: 0.85rem; color: #64748b; margin-top: 4px; } "
+            + ".timeline-item h3 a { color: #2563eb; text-decoration: none; } "
             + ".timeline-item p { font-size: 0.9rem; margin-top: 4px; } "
             + ".footer { text-align: center; padding: 24px 0; border-top: 1px solid #e2e8f0; font-size: 0.9rem; } "
             + ".footer a { color: #2563eb; text-decoration: none; margin: 0 8px; } "
