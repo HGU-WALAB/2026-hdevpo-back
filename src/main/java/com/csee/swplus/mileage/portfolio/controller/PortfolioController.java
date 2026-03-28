@@ -14,22 +14,19 @@ import com.csee.swplus.mileage.portfolio.dto.SettingsPutRequest;
 import com.csee.swplus.mileage.portfolio.dto.SettingsResponse;
 import com.csee.swplus.mileage.portfolio.dto.TechStackPutRequest;
 import com.csee.swplus.mileage.portfolio.dto.TechStackResponse;
-import com.csee.swplus.mileage.portfolio.dto.ProfileLinkDto;
 import com.csee.swplus.mileage.portfolio.dto.UserInfoPatchRequest;
 import com.csee.swplus.mileage.portfolio.dto.UserInfoResponse;
+import com.csee.swplus.mileage.portfolio.entity.Portfolio;
 import com.csee.swplus.mileage.portfolio.service.PortfolioHtmlExportService;
 import com.csee.swplus.mileage.portfolio.service.PortfolioService;
 import com.csee.swplus.mileage.user.entity.Users;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpStatus;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -38,14 +35,12 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
-
 import javax.validation.Valid;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
-import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
@@ -65,7 +60,6 @@ public class PortfolioController {
     private final AuthService authService;
     private final PortfolioService portfolioService;
     private final PortfolioHtmlExportService htmlExportService;
-    private final ObjectMapper objectMapper;
 
     @Value("${file.portfolio-profile-upload-dir:${file.profile-upload-dir:./uploads/profile}}")
     private String profileUploadDir;
@@ -82,98 +76,60 @@ public class PortfolioController {
     }
 
     /**
-     * PATCH /api/portfolio/user-info – 소개글(bio), 프로필 이미지, 선택적 링크 목록 (multipart/form-data).
-     * Parts/fields: bio (text), profile_image (file), profile_links (text, optional JSON array string, same shape as JSON PATCH).
-     * {@code profile_links} omitted = 링크 유지; {@code []} 또는 빈 문자열 = 전체 삭제.
+     * PATCH /api/portfolio/user-info — JSON only: bio, profile_image_url, profile_links.
+     * {@code profile_links}: null = 유지, [] = 전체 삭제. 파일 업로드는 PUT /user-info/image 사용.
      */
-    @PatchMapping(value = "/user-info", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @Operation(summary = "프로필 수정 (multipart)", description = "bio, profile_image, profile_links (JSON 문자열)")
-    public ResponseEntity<UserInfoResponse> patchUserInfoMultipart(
-            @RequestParam(value = "bio", required = false) String bio,
-            @RequestPart(value = "profile_image", required = false) MultipartFile profileImage,
-            @RequestParam(value = "profile_links", required = false) String profileLinksJson) {
+    @PatchMapping(value = "/user-info", consumes = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "프로필 메타데이터 수정", description = "bio, profile_image_url, profile_links (label+url). 이미지 파일은 PUT /user-info/image")
+    public ResponseEntity<UserInfoResponse> patchUserInfo(@Valid @RequestBody UserInfoPatchRequest request) {
         Users user = getCurrentUser();
-        String profileImageUrl = null;
-        
-        // Handle file upload
-        if (profileImage != null && !profileImage.isEmpty()) {
-            try {
-                // Get current portfolio to check for existing image
-                com.csee.swplus.mileage.portfolio.entity.Portfolio currentPortfolio = portfolioService.getOrCreatePortfolio(user);
-                String oldImageUrl = currentPortfolio.getProfileImageUrl();
-                
-                // Delete old image if exists
-                if (oldImageUrl != null && !oldImageUrl.isEmpty()) {
-                    try {
-                        Path oldImagePath = Paths.get(profileUploadDir).resolve(oldImageUrl);
-                        Files.deleteIfExists(oldImagePath);
-                        log.info("Deleted old profile image: {}", oldImageUrl);
-                    } catch (IOException e) {
-                        log.warn("Failed to delete old profile image: {}", oldImageUrl, e);
-                    }
-                }
-                
-                // Ensure upload directory exists
-                Path uploadPath = Paths.get(profileUploadDir);
-                if (!Files.exists(uploadPath)) {
-                    Files.createDirectories(uploadPath);
-                }
-                
-                // Generate unique filename
-                String originalFilename = profileImage.getOriginalFilename();
-                String extension = originalFilename != null && originalFilename.contains(".") 
-                    ? originalFilename.substring(originalFilename.lastIndexOf(".")) 
-                    : "";
-                String uniqueFilename = UUID.randomUUID().toString() + extension;
-                
-                // Save file
-                Path targetLocation = uploadPath.resolve(uniqueFilename);
-                Files.copy(profileImage.getInputStream(), targetLocation, StandardCopyOption.REPLACE_EXISTING);
-                
-                profileImageUrl = uniqueFilename;
-                log.info("Profile image saved: {}", uniqueFilename);
-            } catch (IOException e) {
-                log.error("Failed to save profile image", e);
-                throw new RuntimeException("프로필 이미지 저장 중 오류가 발생했습니다.");
-            }
-        }
-        
-        List<ProfileLinkDto> profileLinks = parseProfileLinksMultipartParam(profileLinksJson);
-
-        UserInfoResponse body = portfolioService.updateBio(user, bio, profileImageUrl, profileLinks);
+        UserInfoResponse body = portfolioService.updateBio(user, request.getBio(), request.getProfile_image_url(),
+                request.getProfile_links());
         return ResponseEntity.ok(body);
     }
 
     /**
-     * {@code null} = 필드 없음(링크 유지); 빈 문자열 또는 {@code []} = 삭제; 그 외 JSON 배열 파싱.
+     * PUT /api/portfolio/user-info/image — multipart only: 새 프로필 이미지 파일 업로드 (기존 파일 교체).
+     * Part: profile_image (required).
      */
-    private List<ProfileLinkDto> parseProfileLinksMultipartParam(String profileLinksJson) {
-        if (profileLinksJson == null) {
-            return null;
-        }
-        String t = profileLinksJson.trim();
-        if (t.isEmpty() || "[]".equals(t)) {
-            return Collections.emptyList();
-        }
-        try {
-            return objectMapper.readValue(t, new TypeReference<List<ProfileLinkDto>>() {});
-        } catch (JsonProcessingException e) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "profile_links must be a JSON array of {label, url}: " + e.getMessage());
-        }
-    }
-
-    /**
-     * PATCH /api/portfolio/user-info – 소개글(bio), 프로필 이미지 URL, 선택적 링크 목록 (application/json).
-     * Body: { "bio", "profile_image_url", "profile_links": [ { "label": "Blog", "url": "https://..." } ] }
-     * {@code profile_links}: null = 유지, [] = 전체 삭제.
-     */
-    @PatchMapping(value = "/user-info", consumes = MediaType.APPLICATION_JSON_VALUE)
-    @Operation(summary = "프로필 수정 (JSON)", description = "bio, profile_image_url, profile_links (label+url)")
-    public ResponseEntity<UserInfoResponse> patchUserInfoJson(@Valid @RequestBody UserInfoPatchRequest request) {
+    @PutMapping(value = "/user-info/image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "프로필 이미지 업로드", description = "multipart: profile_image 파일만")
+    public ResponseEntity<UserInfoResponse> putUserInfoImage(@RequestPart("profile_image") MultipartFile profileImage) {
         Users user = getCurrentUser();
-        UserInfoResponse body = portfolioService.updateBio(user, request.getBio(), request.getProfile_image_url(),
-                request.getProfile_links());
+        if (profileImage == null || profileImage.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "profile_image is required");
+        }
+        String profileImageUrl;
+        try {
+            Portfolio currentPortfolio = portfolioService.getOrCreatePortfolio(user);
+            String oldImageUrl = currentPortfolio.getProfileImageUrl();
+            if (oldImageUrl != null && !oldImageUrl.isEmpty()) {
+                try {
+                    Path oldImagePath = Paths.get(profileUploadDir).resolve(oldImageUrl);
+                    Files.deleteIfExists(oldImagePath);
+                    log.info("Deleted old profile image: {}", oldImageUrl);
+                } catch (IOException e) {
+                    log.warn("Failed to delete old profile image: {}", oldImageUrl, e);
+                }
+            }
+            Path uploadPath = Paths.get(profileUploadDir);
+            if (!Files.exists(uploadPath)) {
+                Files.createDirectories(uploadPath);
+            }
+            String originalFilename = profileImage.getOriginalFilename();
+            String extension = originalFilename != null && originalFilename.contains(".")
+                    ? originalFilename.substring(originalFilename.lastIndexOf("."))
+                    : "";
+            String uniqueFilename = UUID.randomUUID().toString() + extension;
+            Path targetLocation = uploadPath.resolve(uniqueFilename);
+            Files.copy(profileImage.getInputStream(), targetLocation, StandardCopyOption.REPLACE_EXISTING);
+            profileImageUrl = uniqueFilename;
+            log.info("Profile image saved: {}", uniqueFilename);
+        } catch (IOException e) {
+            log.error("Failed to save profile image", e);
+            throw new RuntimeException("프로필 이미지 저장 중 오류가 발생했습니다.");
+        }
+        UserInfoResponse body = portfolioService.updateBio(user, null, profileImageUrl, null);
         return ResponseEntity.ok(body);
     }
 

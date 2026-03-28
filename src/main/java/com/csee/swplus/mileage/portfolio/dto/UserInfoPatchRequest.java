@@ -9,7 +9,8 @@ import javax.validation.constraints.Size;
 import java.util.List;
 
 /**
- * PATCH /api/portfolio/user-info – 소개글(bio) 및 프로필 이미지 수정 요청.
+ * PATCH /api/portfolio/user-info (application/json) — bio, profile_image_url, profile_links.
+ * 이미지 파일 업로드는 PUT /api/portfolio/user-info/image.
  */
 @Getter
 @Setter
