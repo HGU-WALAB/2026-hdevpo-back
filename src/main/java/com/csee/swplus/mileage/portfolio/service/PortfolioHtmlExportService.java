@@ -81,7 +81,9 @@ public class PortfolioHtmlExportService {
         sb.append("- 학교/학과: ").append(schoolDept(userInfo)).append("\n");
         sb.append("- 학년/학기: (").append(nullToEmpty(userInfo.getGrade())).append("학년 ")
           .append(nullToEmpty(userInfo.getSemester())).append("학기)\n");
-        sb.append("- 한줄 자기소개: ").append(nullToEmpty(userInfo.getBio())).append("\n\n");
+        sb.append("- 한줄 자기소개: ").append(nullToEmpty(userInfo.getBio())).append("\n");
+        appendProfileLinksLines(sb, userInfo);
+        sb.append("\n");
 
         appendTechStackPlainText(sb, techStack);
 
@@ -191,7 +193,9 @@ public class PortfolioHtmlExportService {
         sb.append("- 학교/학과: ").append(schoolDept(userInfo)).append("\n");
         sb.append("- 학년/학기: (").append(nullToEmpty(userInfo.getGrade())).append("학년 ")
           .append(nullToEmpty(userInfo.getSemester())).append("학기)\n");
-        sb.append("- 한줄 자기소개: ").append(nullToEmpty(userInfo.getBio())).append("\n\n");
+        sb.append("- 한줄 자기소개: ").append(nullToEmpty(userInfo.getBio())).append("\n");
+        appendProfileLinksLines(sb, userInfo);
+        sb.append("\n");
 
         appendTechStackPlainText(sb, techStack);
 
@@ -258,6 +262,24 @@ public class PortfolioHtmlExportService {
 
     private String nullToEmpty(Object o) {
         return o == null ? "" : String.valueOf(o);
+    }
+
+    private void appendProfileLinksLines(StringBuilder sb, UserInfoResponse userInfo) {
+        if (userInfo.getProfile_links() == null || userInfo.getProfile_links().isEmpty()) {
+            return;
+        }
+        for (ProfileLinkDto p : userInfo.getProfile_links()) {
+            if (p == null) {
+                continue;
+            }
+            String url = p.getUrl() != null ? p.getUrl().trim() : "";
+            if (url.isEmpty()) {
+                continue;
+            }
+            String label = p.getLabel() != null && !p.getLabel().trim().isEmpty()
+                    ? p.getLabel().trim() : url;
+            sb.append("- 링크: ").append(label).append(" — ").append(url).append("\n");
+        }
     }
 
     /** Prefer languages list; fall back to single language. */
@@ -331,6 +353,17 @@ public class PortfolioHtmlExportService {
         sb.append("    <div class=\"contact-icons\">");
         if (githubUrl != null) sb.append(" <a href=\"").append(escape(githubUrl)).append("\" target=\"_blank\" rel=\"noopener\">GitHub</a>");
         if (email != null && !email.isEmpty()) sb.append(" <a href=\"mailto:").append(escape(email)).append("\">Email</a>");
+        if (userInfo.getProfile_links() != null) {
+            for (ProfileLinkDto pl : userInfo.getProfile_links()) {
+                if (pl == null) continue;
+                String href = pl.getUrl() != null ? pl.getUrl().trim() : "";
+                if (href.isEmpty()) continue;
+                String lab = pl.getLabel() != null && !pl.getLabel().trim().isEmpty()
+                        ? pl.getLabel().trim() : "Link";
+                sb.append(" <a href=\"").append(escape(href)).append("\" target=\"_blank\" rel=\"noopener noreferrer\">")
+                        .append(escape(lab)).append("</a>");
+            }
+        }
         sb.append("</div>\n  </header>\n");
 
         // About Me

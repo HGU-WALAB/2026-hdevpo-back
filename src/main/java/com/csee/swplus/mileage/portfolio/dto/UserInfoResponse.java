@@ -5,6 +5,8 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 /**
  * GET /api/portfolio/user-info – 기본 정보 응답 (학교 정보는 수정 불가, bio만 편집 가능).
  */
@@ -22,4 +24,7 @@ public class UserInfoResponse {
     private Integer semester;
     private String bio;
     private String profile_image_url;
+
+    /** Optional labeled URLs (e.g. blog, portfolio site). */
+    private List<ProfileLinkDto> profile_links;
 }

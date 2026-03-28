@@ -128,20 +128,21 @@ public class PortfolioController {
             }
         }
         
-        UserInfoResponse body = portfolioService.updateBio(user, bio, profileImageUrl);
+        UserInfoResponse body = portfolioService.updateBio(user, bio, profileImageUrl, null);
         return ResponseEntity.ok(body);
     }
 
     /**
-     * PATCH /api/portfolio/user-info – 소개글(bio) 및 프로필 이미지 URL 수정 (application/json).
-     * Body: { "bio": "...", "profile_image_url": "..." }
-     * Use this for updating bio only or setting/clearing profile_image_url without file upload.
+     * PATCH /api/portfolio/user-info – 소개글(bio), 프로필 이미지 URL, 선택적 링크 목록 (application/json).
+     * Body: { "bio", "profile_image_url", "profile_links": [ { "label": "Blog", "url": "https://..." } ] }
+     * {@code profile_links}: null = 유지, [] = 전체 삭제.
      */
     @PatchMapping(value = "/user-info", consumes = MediaType.APPLICATION_JSON_VALUE)
-    @Operation(summary = "프로필 수정 (JSON)", description = "bio, profile_image_url")
+    @Operation(summary = "프로필 수정 (JSON)", description = "bio, profile_image_url, profile_links (label+url)")
     public ResponseEntity<UserInfoResponse> patchUserInfoJson(@Valid @RequestBody UserInfoPatchRequest request) {
         Users user = getCurrentUser();
-        UserInfoResponse body = portfolioService.updateBio(user, request.getBio(), request.getProfile_image_url());
+        UserInfoResponse body = portfolioService.updateBio(user, request.getBio(), request.getProfile_image_url(),
+                request.getProfile_links());
         return ResponseEntity.ok(body);
     }
 
