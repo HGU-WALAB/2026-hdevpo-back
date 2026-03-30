@@ -27,7 +27,10 @@ public class CvBuildPromptRequest {
     /** 추가 요청사항 */
     private String additional_notes;
 
-    /** Optional title for the CV. Defaults to "새 이력서" if empty. */
+    /**
+     * Optional title. If blank, server sets "{@code target_position} · yyyy-MM-dd" (Asia/Seoul),
+     * or "새 이력서 · yyyy-MM-dd" when 지원 직무도 비어 있음.
+     */
     private String title;
 
     /** Selected mileage entry IDs (portfolio_mileage link id). */

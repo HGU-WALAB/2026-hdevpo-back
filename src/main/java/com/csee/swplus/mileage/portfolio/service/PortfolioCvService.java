@@ -9,6 +9,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -20,6 +23,10 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class PortfolioCvService {
 
+    private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
+    private static final DateTimeFormatter CV_TITLE_DATE = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+    private static final int CV_TITLE_MAX_LEN = 255;
+
     private final PortfolioCvRepository cvRepository;
     private final PortfolioHtmlExportService htmlExportService;
 
@@ -29,8 +36,7 @@ public class PortfolioCvService {
      */
     public CvBuildPromptResponse buildPrompt(Users user, CvBuildPromptRequest request) {
         String prompt = htmlExportService.buildCvPrompt(user, request);
-        String title = (request.getTitle() != null && !request.getTitle().trim().isEmpty())
-                ? request.getTitle().trim() : "새 이력서";
+        String title = resolveDefaultCvTitle(request);
         PortfolioCv cv = PortfolioCv.builder()
                 .user(user)
                 .title(title)
@@ -56,6 +62,27 @@ public class PortfolioCvService {
                 .map(this::toListItem)
                 .collect(Collectors.toList());
         return CvListResponse.builder().cvs(items).build();
+    }
+
+    /**
+     * Uses explicit {@code title} when non-blank; otherwise "{@code target_position} · yyyy-MM-dd"
+     * (Asia/Seoul), or "새 이력서 · yyyy-MM-dd" when 지원 직무도 비어 있음. Truncates to DB column length.
+     */
+    private static String resolveDefaultCvTitle(CvBuildPromptRequest request) {
+        if (request.getTitle() != null && !request.getTitle().trim().isEmpty()) {
+            return truncateTitle(request.getTitle().trim());
+        }
+        String dateStr = LocalDate.now(SEOUL).format(CV_TITLE_DATE);
+        String position = request.getTarget_position() != null ? request.getTarget_position().trim() : "";
+        String base = position.isEmpty() ? "새 이력서 · " + dateStr : position + " · " + dateStr;
+        return truncateTitle(base);
+    }
+
+    private static String truncateTitle(String s) {
+        if (s.length() <= CV_TITLE_MAX_LEN) {
+            return s;
+        }
+        return s.substring(0, CV_TITLE_MAX_LEN);
     }
 
     /**
