@@ -1,30 +1,29 @@
-name: Bug Report
-about: Report a bug
+---
+name: Bug
+about: Something is broken
 title: "[BUG] "
 labels: bug
-assignees: ''
-
 ---
 
-## Description
+## 🐛 What’s broken
+<!-- Short description -->
 
-<!-- One-line summary of the bug -->
+## 📍 Where
+<!-- URL / endpoint / feature -->
 
-## Steps to Reproduce
-
+## 🔁 Steps to reproduce
 1.
 2.
+3.
 
-## Expected vs Actual
+## ✅ Expected
+<!-- What should happen -->
 
-- **Expected:**
-- **Actual:**
+## ❌ Actual
+<!-- What happens instead -->
 
-## Environment
+## 📸 Logs / Errors
+<!-- Paste stack traces, console logs -->
 
-- OS / Device:
-- Version:
-
-## Notes / Logs
-
-<!-- Optional: stack traces, screenshots, or anything to remember -->
+## 🧠 Notes
+<!-- Any suspicion, related code, quick thoughts -->

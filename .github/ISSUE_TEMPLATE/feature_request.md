@@ -1,23 +1,18 @@
-name: Feature Request
-about: Suggest a new feature
+---
+name: Feature
+about: New functionality
 title: "[FEAT] "
 labels: enhancement
-assignees: ''
-
 ---
 
-## Summary
+## ✨ What
+<!-- What are we building -->
 
-<!-- One-line description of the feature -->
+## 🎯 Why
+<!-- Why this is needed -->
 
-## Motivation
+## 🛠️ How (rough idea)
+<!-- Optional implementation idea -->
 
-<!-- Why do you want this? What problem does it solve? -->
-
-## Proposed Solution
-
-<!-- How you plan to implement it -->
-
-## Notes
-
-<!-- Optional: anything to remember or link to related code/issues -->
+## 📎 References
+<!-- Designs, API ideas, related issues -->
