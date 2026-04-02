@@ -35,8 +35,13 @@ public class Portfolio extends BaseTime {
     @Column(name = "bio", columnDefinition = "TEXT")
     private String bio;
 
-    @Column(name = "profile_image_url", length = 255)
-    private String profileImageUrl;
+    /** Local filename under the configured profile upload directory (multipart PUT). */
+    @Column(name = "profile_image_upload_key", length = 255)
+    private String profileImageUploadKey;
+
+    /** Optional HTTPS URL for profile photo (CV/HTML export prefers this over upload). */
+    @Column(name = "profile_image_external_url", length = 2048)
+    private String profileImageExternalUrl;
 
     /** Optional labeled links (JSON array in DB). */
     @Convert(converter = ProfileLinksJsonConverter.class)
