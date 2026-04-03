@@ -7,10 +7,12 @@ import com.csee.swplus.mileage.user.entity.Users;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.web.util.UriUtils;
 
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -31,8 +33,12 @@ public class PortfolioHtmlExportService {
     private final PortfolioService portfolioService;
     private final ProfileRepository profileRepository;
 
-    @Value("${app.base-url:http://localhost:8080}")
-    private String appBaseUrl;
+    /**
+     * Must match {@code server.servlet.context-path} (e.g. {@code /milestone25}) so export {@code img} URLs
+     * resolve like the live app ({@code /milestone25/api/...}), not {@code /api/...} at domain root.
+     */
+    @Value("${server.servlet.context-path:}")
+    private String servletContextPath;
 
     @Value("${file.portfolio-profile-upload-dir:${file.profile-upload-dir:./uploads/profile}}")
     private String profileUploadDir;
@@ -767,7 +773,7 @@ public class PortfolioHtmlExportService {
         return s.toString().trim();
     }
 
-    /** Prefer external HTTPS URL; otherwise inline base64 or API URL from upload key. */
+    /** Prefer external HTTPS URL; otherwise inline base64 or context-path-relative image URL (no hostname). */
     private String buildProfileImageSrc(UserInfoResponse userInfo) {
         String external = userInfo.getProfile_image_external_url();
         if (external != null && !external.trim().isEmpty()) {
@@ -796,9 +802,23 @@ public class PortfolioHtmlExportService {
                 return "data:" + mime + ";base64," + b64;
             }
         } catch (IOException ignored) {
-            /* fall through to URL */
+            /* fall through to relative URL */
         }
-        return escape(appBaseUrl + "/api/portfolio/user-info/image/" + filename);
+        String rel = buildProfileImageUploadRelativeUrl(filename);
+        return escape(rel);
+    }
+
+    /**
+     * {@code /milestone25/api/portfolio/user-info/image/...} when context-path is {@code /milestone25};
+     * {@code /api/...} when context-path is empty (local default).
+     */
+    private String buildProfileImageUploadRelativeUrl(String filename) {
+        String prefix = servletContextPath != null ? servletContextPath.trim() : "";
+        if (prefix.endsWith("/")) {
+            prefix = prefix.substring(0, prefix.length() - 1);
+        }
+        return prefix + "/api/portfolio/user-info/image/"
+                + UriUtils.encodePathSegment(filename, StandardCharsets.UTF_8);
     }
 
     private String escape(String s) {
