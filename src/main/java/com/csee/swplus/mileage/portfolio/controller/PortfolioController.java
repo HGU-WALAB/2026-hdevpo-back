@@ -9,6 +9,7 @@ import com.csee.swplus.mileage.portfolio.dto.MileageUpdateRequest;
 import com.csee.swplus.mileage.portfolio.dto.RepoEntryRequest;
 import com.csee.swplus.mileage.portfolio.dto.RepoEntryResponse;
 import com.csee.swplus.mileage.portfolio.dto.RepoPatchRequest;
+import com.csee.swplus.mileage.portfolio.dto.GithubRepoCacheSyncResult;
 import com.csee.swplus.mileage.portfolio.dto.RepositoriesResponse;
 import com.csee.swplus.mileage.portfolio.dto.SettingsPutRequest;
 import com.csee.swplus.mileage.portfolio.dto.SettingsResponse;
@@ -91,6 +92,17 @@ public class PortfolioController {
             @RequestParam(value = "affiliation", required = false) String affiliation) {
         Users user = getCurrentUser();
         return ResponseEntity.ok(portfolioService.getRepositories(user, page, perPage, selectedOnly, visibleOnly, sort, visibility, affiliation));
+    }
+
+    /**
+     * POST /api/portfolio/repositories/github-cache/refresh — calls GitHub (paginated) and upserts DB cache rows.
+     * Does not change GET /repositories behavior yet; use for jobs or manual warm-up.
+     */
+    @PostMapping("/repositories/github-cache/refresh")
+    @Operation(summary = "GitHub 레포 메타 캐시 갱신", description = "GitHub API → _sw_mileage_portfolio_github_repo_cache")
+    public ResponseEntity<GithubRepoCacheSyncResult> refreshGithubRepoCache() {
+        Users user = getCurrentUser();
+        return ResponseEntity.ok(portfolioService.refreshGithubRepositoriesCache(user));
     }
 
     /**

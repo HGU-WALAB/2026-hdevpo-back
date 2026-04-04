@@ -13,6 +13,7 @@ import com.csee.swplus.mileage.portfolio.dto.RepoEntryRequest;
 import com.csee.swplus.mileage.portfolio.dto.RepoEntryResponse;
 import com.csee.swplus.mileage.portfolio.dto.RepoLanguageDto;
 import com.csee.swplus.mileage.portfolio.dto.RepoPatchRequest;
+import com.csee.swplus.mileage.portfolio.dto.GithubRepoCacheSyncResult;
 import com.csee.swplus.mileage.portfolio.dto.RepositoriesResponse;
 import com.csee.swplus.mileage.portfolio.dto.SettingsResponse;
 import com.csee.swplus.mileage.portfolio.dto.TechStackDomainPutDto;
@@ -29,8 +30,10 @@ import com.csee.swplus.mileage.portfolio.entity.PortfolioActivity;
 import com.csee.swplus.mileage.portfolio.entity.PortfolioDomain;
 import com.csee.swplus.mileage.portfolio.entity.PortfolioTechStackEntry;
 import com.csee.swplus.mileage.portfolio.entity.PortfolioMileageEntry;
+import com.csee.swplus.mileage.portfolio.entity.PortfolioGithubRepoCache;
 import com.csee.swplus.mileage.portfolio.entity.PortfolioRepoEntry;
 import com.csee.swplus.mileage.portfolio.repository.PortfolioActivityRepository;
+import com.csee.swplus.mileage.portfolio.repository.PortfolioGithubRepoCacheRepository;
 import com.csee.swplus.mileage.portfolio.repository.PortfolioDomainRepository;
 import com.csee.swplus.mileage.portfolio.repository.PortfolioMileageEntryRepository;
 import com.csee.swplus.mileage.portfolio.repository.PortfolioRepository;
@@ -54,6 +57,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -65,6 +69,7 @@ public class PortfolioService {
     private final PortfolioRepository portfolioRepository;
     private final PortfolioDomainRepository portfolioDomainRepository;
     private final PortfolioRepoEntryRepository portfolioRepoEntryRepository;
+    private final PortfolioGithubRepoCacheRepository portfolioGithubRepoCacheRepository;
     private final PortfolioActivityRepository portfolioActivityRepository;
     private final PortfolioMileageEntryRepository portfolioMileageEntryRepository;
     private final EtcSubitemRepository etcSubitemRepository;
@@ -351,39 +356,11 @@ public class PortfolioService {
 
         if (githubUsername != null && !githubUsername.isEmpty()) {
             try {
-                Map<String, Object>[] repos = null;
-                if (githubToken != null) {
-                    // Authenticated: GET /user/repos – includes private + org repos
-                    String url = UriComponentsBuilder
-                            .fromHttpUrl(githubApiBaseUrl + "/user/repos")
-                            .queryParam("sort", sortParam)
-                            .queryParam("direction", "desc")
-                            .queryParam("per_page", limit)
-                            .queryParam("page", p)
-                            .queryParam("visibility", visibilityParam)
-                            .queryParam("affiliation", affiliationParam)
-                            .toUriString();
-                    HttpHeaders headers = new HttpHeaders();
-                    headers.setBearerAuth(githubToken);
-                    headers.setAccept(java.util.Arrays.asList(MediaType.APPLICATION_JSON));
-                    HttpEntity<Void> req = new HttpEntity<>(headers);
-                    ResponseEntity<Map[]> res = restTemplate.exchange(url, HttpMethod.GET, req, Map[].class);
-                    repos = res.getBody();
-                } else {
-                    // Unauthenticated: GET /users/{username}/repos – public owner repos only
-                    String url = UriComponentsBuilder
-                            .fromHttpUrl(githubApiBaseUrl + "/users/" + githubUsername + "/repos")
-                            .queryParam("type", "owner")
-                            .queryParam("sort", sortParam)
-                            .queryParam("direction", "desc")
-                            .queryParam("per_page", limit)
-                            .queryParam("page", p)
-                            .toUriString();
-                    repos = restTemplate.getForObject(url, Map[].class);
-                }
+                Map[] repos = fetchGithubReposPage(
+                        githubUsername, githubToken, p, limit, sortParam, visibilityParam, affiliationParam);
 
                 if (repos != null) {
-                    for (Map<String, Object> repo : repos) {
+                    for (Map repo : repos) {
                         if (repo == null) continue;
 
                         Object idObj = repo.get("id");
@@ -474,6 +451,137 @@ public class PortfolioService {
         }
 
         return RepositoriesResponse.builder().repositories(list).build();
+    }
+
+    /**
+     * Fetches one page of repos from GitHub (same rules as {@link #getRepositories} list call).
+     */
+    private Map[] fetchGithubReposPage(
+            String githubUsername,
+            String githubToken,
+            int page,
+            int perPage,
+            String sortParam,
+            String visibilityParam,
+            String affiliationParam) {
+        if (githubToken != null && !githubToken.isEmpty()) {
+            String url = UriComponentsBuilder
+                    .fromHttpUrl(githubApiBaseUrl + "/user/repos")
+                    .queryParam("sort", sortParam)
+                    .queryParam("direction", "desc")
+                    .queryParam("per_page", perPage)
+                    .queryParam("page", page)
+                    .queryParam("visibility", visibilityParam)
+                    .queryParam("affiliation", affiliationParam)
+                    .toUriString();
+            HttpHeaders headers = new HttpHeaders();
+            headers.setBearerAuth(githubToken);
+            headers.setAccept(java.util.Arrays.asList(MediaType.APPLICATION_JSON));
+            HttpEntity<Void> req = new HttpEntity<>(headers);
+            ResponseEntity<Map[]> res = restTemplate.exchange(url, HttpMethod.GET, req, Map[].class);
+            return res.getBody();
+        }
+        String url = UriComponentsBuilder
+                .fromHttpUrl(githubApiBaseUrl + "/users/" + githubUsername + "/repos")
+                .queryParam("type", "owner")
+                .queryParam("sort", sortParam)
+                .queryParam("direction", "desc")
+                .queryParam("per_page", perPage)
+                .queryParam("page", page)
+                .toUriString();
+        return restTemplate.getForObject(url, Map[].class);
+    }
+
+    /**
+     * Calls GitHub (paginated), then upserts {@link PortfolioGithubRepoCache} rows.
+     * Does not change GET /repositories yet — use this from a scheduled job or POST refresh to fill the cache.
+     *
+     * @return number of repo rows written/updated this run
+     */
+    public GithubRepoCacheSyncResult refreshGithubRepositoriesCache(Users user) {
+        Portfolio portfolio = getOrCreatePortfolio(user);
+        Profile profile = profileRepository.findBySnum(user.getUniqueId()).orElse(null);
+        String githubUsername = profile != null ? profile.getGithubUsername() : null;
+        if (githubUsername == null || githubUsername.isEmpty()) {
+            return new GithubRepoCacheSyncResult(0);
+        }
+        String githubToken = null;
+        if (tokenEncryptionKey != null && !tokenEncryptionKey.isEmpty()
+                && profile.getGithubAccessToken() != null && !profile.getGithubAccessToken().isEmpty()) {
+            githubToken = TokenEncryptionUtil.decrypt(profile.getGithubAccessToken(), tokenEncryptionKey);
+        }
+        String sortParam = "updated";
+        String visibilityParam = "all";
+        String affiliationParam = "owner,collaborator,organization_member";
+        int perPage = 100;
+        LocalDateTime now = LocalDateTime.now();
+        int synced = 0;
+        for (int p = 1; p <= 50; p++) {
+            Map[] repos = fetchGithubReposPage(
+                    githubUsername, githubToken, p, perPage, sortParam, visibilityParam, affiliationParam);
+            if (repos == null || repos.length == 0) {
+                break;
+            }
+            for (Map repo : repos) {
+                if (repo == null) {
+                    continue;
+                }
+                Object idObj = repo.get("id");
+                if (!(idObj instanceof Number)) {
+                    continue;
+                }
+                long repoId = ((Number) idObj).longValue();
+                String name = (String) repo.get("name");
+                String htmlUrl = (String) repo.get("html_url");
+                String language = (String) repo.get("language");
+                Object c = repo.get("created_at");
+                Object u = repo.get("updated_at");
+                String createdAt = c != null ? c.toString() : null;
+                String updatedAt = u != null ? u.toString() : null;
+                Boolean isPrivate = (Boolean) repo.get("private");
+                String vis = isPrivate != null && isPrivate ? "private" : "public";
+                Integer stargazersCount = null;
+                Object sc = repo.get("stargazers_count");
+                if (sc instanceof Number) {
+                    stargazersCount = ((Number) sc).intValue();
+                }
+                Integer forksCount = null;
+                Object fc = repo.get("forks_count");
+                if (fc instanceof Number) {
+                    forksCount = ((Number) fc).intValue();
+                }
+                String ownerLogin = null;
+                Object ownerObj = repo.get("owner");
+                if (ownerObj instanceof Map) {
+                    ownerLogin = (String) ((Map<?, ?>) ownerObj).get("login");
+                }
+                List<RepoLanguageDto> languages = fetchRepoLanguages(ownerLogin, name, githubToken);
+                if (languages.isEmpty() && language != null && !language.isEmpty()) {
+                    languages = Collections.singletonList(
+                            RepoLanguageDto.builder().name(language).percentage(null).build());
+                }
+                PortfolioGithubRepoCache row = portfolioGithubRepoCacheRepository
+                        .findByPortfolio_IdAndRepoId(portfolio.getId(), repoId)
+                        .orElseGet(() -> PortfolioGithubRepoCache.builder()
+                                .portfolio(portfolio)
+                                .repoId(repoId)
+                                .build());
+                row.setName(name);
+                row.setHtmlUrl(htmlUrl);
+                row.setPrimaryLanguage(language);
+                row.setLanguages(languages.isEmpty() ? new ArrayList<>() : new ArrayList<>(languages));
+                row.setGithubCreatedAt(createdAt);
+                row.setGithubUpdatedAt(updatedAt);
+                row.setVisibility(vis);
+                row.setOwnerLogin(ownerLogin);
+                row.setStargazersCount(stargazersCount);
+                row.setForksCount(forksCount);
+                row.setGithubSyncedAt(now);
+                portfolioGithubRepoCacheRepository.save(row);
+                synced++;
+            }
+        }
+        return new GithubRepoCacheSyncResult(synced);
     }
 
     /**
