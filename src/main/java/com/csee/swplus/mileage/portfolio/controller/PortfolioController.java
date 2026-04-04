@@ -9,6 +9,7 @@ import com.csee.swplus.mileage.portfolio.dto.MileageUpdateRequest;
 import com.csee.swplus.mileage.portfolio.dto.RepoEntryRequest;
 import com.csee.swplus.mileage.portfolio.dto.RepoEntryResponse;
 import com.csee.swplus.mileage.portfolio.dto.RepoPatchRequest;
+import com.csee.swplus.mileage.portfolio.dto.GithubRepoCacheSyncResult;
 import com.csee.swplus.mileage.portfolio.dto.RepositoriesResponse;
 import com.csee.swplus.mileage.portfolio.dto.SettingsPutRequest;
 import com.csee.swplus.mileage.portfolio.dto.SettingsResponse;
@@ -74,13 +75,14 @@ public class PortfolioController {
     }
 
     /**
-     * GET /api/portfolio/repositories – GitHub 레포 목록 + (선택된 레포에 한해) 커스텀 설정 정보.
+     * GET /api/portfolio/repositories – DB 캐시(_sw_mileage_portfolio_github_repo_cache) 페이지 목록 +
+     * (선택된 레포에 한해) 커스텀 설정. 캐시는 POST …/github-cache/refresh 로 채움. 상세/언어 갱신은 PATCH …/repositories/{id}.
      * Optional: ?page=1&per_page=30 | ?selected_only=true | ?visible_only=true |
      * ?sort=updated|created|pushed|full_name | ?visibility=all|public|private |
-     * ?affiliation=owner,collaborator,organization_member (requires stored token for private/org).
+     * ?affiliation=… (캐시에 없어 무시됨).
      */
     @GetMapping("/repositories")
-    @Operation(summary = "GitHub 레포 목록", description = "페이지·필터·정렬 쿼리 지원")
+    @Operation(summary = "GitHub 레포 목록 (캐시)", description = "DB 캐시 기반 페이지네이션. refresh로 선행 채우기.")
     public ResponseEntity<RepositoriesResponse> getRepositories(
             @RequestParam(value = "page", required = false) Integer page,
             @RequestParam(value = "per_page", required = false) Integer perPage,
@@ -91,6 +93,18 @@ public class PortfolioController {
             @RequestParam(value = "affiliation", required = false) String affiliation) {
         Users user = getCurrentUser();
         return ResponseEntity.ok(portfolioService.getRepositories(user, page, perPage, selectedOnly, visibleOnly, sort, visibility, affiliation));
+    }
+
+    /**
+     * POST /api/portfolio/repositories/github-cache/refresh — calls GitHub (paginated) and upserts DB cache rows.
+     * Does not change GET /repositories behavior yet; use for jobs or manual warm-up.
+     */
+    @PostMapping("/repositories/github-cache/refresh")
+    @Operation(summary = "GitHub 레포 메타 캐시 갱신",
+            description = "List API만 사용해 repo_id·name·html_url만 갱신(빠름). 언어/상세는 포트폴리오에 레포 추가 시 PUT/PATCH에서 채움.")
+    public ResponseEntity<GithubRepoCacheSyncResult> refreshGithubRepoCache() {
+        Users user = getCurrentUser();
+        return ResponseEntity.ok(portfolioService.refreshGithubRepositoriesCache(user));
     }
 
     /**
