@@ -6,13 +6,21 @@ labels: enhancement
 ---
 
 ## ✨ What
-<!-- What are we building -->
+<!-- What are we building? (1–2 sentences) -->
 
 ## 🎯 Why
-<!-- Why this is needed -->
+<!-- What problem does this solve? -->
 
 ## 🛠️ How (rough idea)
-<!-- Optional implementation idea -->
+<!-- Optional: high-level implementation idea.
+Avoid low-level details. -->
+
+## ✅ Done When
+<!-- Define success criteria.
+Issue can be closed when ALL items are checked. -->
+- [ ] Feature works as intended
+- [ ] No breaking API changes (or documented)
+- [ ] Tested locally
 
 ## 📎 References
-<!-- Designs, API ideas, related issues -->
+<!-- Related issues, PRs, designs, notes, links -->

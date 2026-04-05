@@ -6,10 +6,8 @@ labels: bug
 ---
 
 ## 🐛 What’s broken
-<!-- Short description -->
 
 ## 📍 Where
-<!-- URL / endpoint / feature -->
 
 ## 🔁 Steps to reproduce
 1.
@@ -17,13 +15,15 @@ labels: bug
 3.
 
 ## ✅ Expected
-<!-- What should happen -->
 
 ## ❌ Actual
-<!-- What happens instead -->
+
+## 🖥️ Environment (optional)
 
 ## 📸 Logs / Errors
-<!-- Paste stack traces, console logs -->
 
 ## 🧠 Notes
-<!-- Any suspicion, related code, quick thoughts -->
+
+## ✔ Checklist
+- [ ] Reproduced
+- [ ] Expected behavior confirmed

@@ -1,23 +1,38 @@
-## Description
+## Summary
+<!-- What changed in this PR (short + factual). -->
 
-<!-- Summarize the changes and rationale. Include impact and approach. -->
+## Why
+<!-- Why this change is needed.-->
 
-## Changes Made
+## Changes
+<!-- List concrete implementation changes -->
 - 
 -
+-
+
+
+## API / Behavior Changes
+<!-- Only fill if API or behavior changed -->
+
+- New endpoint:
+- Updated endpoint:
+- Removed behavior:
+
 
 ## How to Test
 1.
 2.
 3.
 
-## Related Issues
+<!-- Example:
+1. Create CV via build-prompt
+2. PATCH is_public=true
+3. Open /share/cv/{token}/html
+-->
 
-<!-- "Closes #123" to auto-close on merge -->
-
+## Related Issue
 Closes #
 
-## Notes / Todo
 
+## Notes
 - [x] Tested locally
-<!-- Optional: Any notes about breaking changes, future improvements, or edge cases -->
