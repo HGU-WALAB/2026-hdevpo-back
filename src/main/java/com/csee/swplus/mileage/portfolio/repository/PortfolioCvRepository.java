@@ -13,4 +13,6 @@ public interface PortfolioCvRepository extends JpaRepository<PortfolioCv, Long> 
     List<PortfolioCv> findByUser_IdOrderByRegdateDesc(Long userId);
 
     Optional<PortfolioCv> findByIdAndUser_Id(Long id, Long userId);
+
+    Optional<PortfolioCv> findByPublicToken(String publicToken);
 }

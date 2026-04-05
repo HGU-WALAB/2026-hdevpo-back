@@ -44,4 +44,12 @@ public class PortfolioCv extends BaseTime {
 
     @Column(name = "html_content", columnDefinition = "LONGTEXT")
     private String htmlContent;
+
+    /** Numeric id for public URL (8–12 digits); unique when set. */
+    @Column(name = "public_token", length = 12, unique = true)
+    private String publicToken;
+
+    /** When true, HTML is served at GET /api/portfolio/share/cv/{public_token}/html */
+    @Column(name = "is_public", nullable = false)
+    private boolean isPublic;
 }
