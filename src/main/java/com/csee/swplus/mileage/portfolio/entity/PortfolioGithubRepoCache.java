@@ -50,6 +50,9 @@ public class PortfolioGithubRepoCache extends BaseTime {
     @Column(name = "html_url", length = 1024)
     private String htmlUrl;
 
+    @Column(name = "github_description", columnDefinition = "TEXT")
+    private String githubDescription;
+
     @Column(name = "primary_language", length = 100)
     private String primaryLanguage;
 

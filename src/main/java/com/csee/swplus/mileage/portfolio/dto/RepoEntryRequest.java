@@ -21,6 +21,10 @@ public class RepoEntryRequest {
 
     private String custom_title;
 
+    /**
+     * Optional user override stored on the link. Omit on PUT when unchanged; do not send GET’s merged
+     * GitHub+user text unless you intend to persist it as the override (it would hide future GitHub updates).
+     */
     private String description;
 
     private Boolean is_visible;

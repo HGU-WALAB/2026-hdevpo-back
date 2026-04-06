@@ -7,7 +7,8 @@ import lombok.Setter;
 
 /**
  * PATCH /api/portfolio/repositories/{id} – partial update for a single repo entry.
- * Only non-null fields are applied.
+ * Only non-null fields are applied. For {@code description}, send an empty string to clear the user
+ * override and fall back to GitHub text on GET.
  */
 @Getter
 @Setter

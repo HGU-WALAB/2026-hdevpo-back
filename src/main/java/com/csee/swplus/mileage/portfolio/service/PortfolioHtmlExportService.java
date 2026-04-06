@@ -102,7 +102,7 @@ public class PortfolioHtmlExportService {
             for (RepoEntryResponse r : repos.getRepositories()) {
                 String title = r.getCustom_title() != null && !r.getCustom_title().isEmpty() ? r.getCustom_title() : r.getName();
                 if (title == null) title = "Repository";
-                String desc = r.getDescription() != null ? r.getDescription() : "";
+                String desc = repoDisplayDescription(r);
                 String langStr = formatRepoLanguages(r);
                 if (!langStr.isEmpty()) langStr = " (" + langStr + ")";
                 String commitStr = (r.getCommit_count() != null) ? " " + r.getCommit_count() + " commits" : "";
@@ -215,7 +215,7 @@ public class PortfolioHtmlExportService {
                 if (r.getId() == null || !repoIds.contains(r.getId())) continue;
                 String title = r.getCustom_title() != null && !r.getCustom_title().isEmpty() ? r.getCustom_title() : r.getName();
                 if (title == null) title = "Repository";
-                String desc = r.getDescription() != null ? r.getDescription() : "";
+                String desc = repoDisplayDescription(r);
                 String langStr = formatRepoLanguages(r);
                 if (!langStr.isEmpty()) langStr = " (" + langStr + ")";
                 String commitStr = (r.getCommit_count() != null) ? " " + r.getCommit_count() + " commits" : "";
@@ -268,6 +268,13 @@ public class PortfolioHtmlExportService {
         sb.append("- Email: ").append(email != null ? email : "").append("\n");
 
         return PROMPT_HEAD + sb.toString() + PROMPT_TAIL;
+    }
+
+    private String repoDisplayDescription(RepoEntryResponse r) {
+        if (r == null || r.getDescription() == null) {
+            return "";
+        }
+        return r.getDescription().trim();
     }
 
     private String nullToEmpty(Object o) {
@@ -491,7 +498,7 @@ public class PortfolioHtmlExportService {
                 if (repoTitle == null || repoTitle.trim().isEmpty()) {
                     repoTitle = "Repository";
                 }
-                String desc = r.getDescription() != null ? r.getDescription().trim() : "";
+                String desc = repoDisplayDescription(r);
                 String link = r.getHtml_url() != null ? r.getHtml_url().trim() : "#";
                 sb.append("                <article class=\"project-card\">\n");
                 sb.append("                  <div class=\"project-header\">\n");

@@ -19,6 +19,10 @@ public class RepoEntryResponse {
     private Long id;
     private Long repo_id;
     private String custom_title;
+    /**
+     * Display text: non-blank value from PATCH on the portfolio link, otherwise GitHub repo description
+     * (from cache / last enrich). PATCH with {@code ""} clears the override and shows GitHub again.
+     */
     private String description;
     private Boolean is_visible;
     private Integer display_order;

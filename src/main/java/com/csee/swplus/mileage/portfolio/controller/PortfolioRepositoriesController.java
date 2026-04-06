@@ -61,7 +61,7 @@ public class PortfolioRepositoriesController {
     }
 
     /**
-     * PUT — 표시할 레포 목록 전체 교체.
+     * PUT — 표시할 레포 목록 전체 동기화 (upsert + reorder + remove).
      */
     @PutMapping
     @Operation(summary = "레포 표시 설정 일괄 동기화")
@@ -71,7 +71,7 @@ public class PortfolioRepositoriesController {
     }
 
     /**
-     * PATCH …/{id} — 단일 레포 설정 수정 + GitHub에서 상세·languages 보강 후 캐시 반영.
+     * PATCH …/{id} — portfolio 링크 PK(id)로 수정 + GitHub 보강.
      */
     @PatchMapping("/{id}")
     @Operation(summary = "단일 레포 설정 수정")
