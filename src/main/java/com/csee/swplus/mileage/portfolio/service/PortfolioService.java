@@ -811,8 +811,8 @@ public class PortfolioService {
     }
 
     /**
-     * PUT /api/portfolio/repositories – 선택 목록 순서·필드 동기화. 새 레포 행은 생성하지 않음
-     * ({@link #patchRepositoryByGithubRepoId}로 먼저 추가). 요청에 없는 repo_id 링크는 삭제.
+     * PUT /api/portfolio/repositories – 선택 목록 전체 동기화 (upsert + reorder + remove).
+     * 요청 본문의 repo_id는 있으면 갱신, 없으면 생성하며, 요청에 없는 기존 링크는 삭제.
      */
     public RepositoriesResponse putRepositories(Users user, java.util.List<RepoEntryRequest> requests) {
         Portfolio portfolio = getOrCreatePortfolio(user);
@@ -839,10 +839,11 @@ public class PortfolioService {
                 }
                 Optional<PortfolioRepoEntry> opt =
                         portfolioRepoEntryRepository.findByPortfolio_IdAndRepoId(portfolio.getId(), r.getRepo_id());
-                if (!opt.isPresent()) {
-                    continue;
-                }
-                PortfolioRepoEntry e = opt.get();
+                PortfolioRepoEntry e = opt.orElseGet(() -> PortfolioRepoEntry.builder()
+                        .portfolio(portfolio)
+                        .repoId(r.getRepo_id())
+                        .isVisible(true)
+                        .build());
                 if (r.getCustom_title() != null) {
                     e.setCustomTitle(r.getCustom_title());
                 }
