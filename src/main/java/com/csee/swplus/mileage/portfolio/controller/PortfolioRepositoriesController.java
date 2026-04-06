@@ -4,6 +4,8 @@ import com.csee.swplus.mileage.auth.service.AuthService;
 import com.csee.swplus.mileage.portfolio.dto.GithubRepoCacheSyncResult;
 import com.csee.swplus.mileage.portfolio.dto.RepoEntryRequest;
 import com.csee.swplus.mileage.portfolio.dto.RepoEntryResponse;
+import com.csee.swplus.mileage.portfolio.dto.RepoGithubBatchPatchRequest;
+import com.csee.swplus.mileage.portfolio.dto.RepoGithubBatchPatchResponse;
 import com.csee.swplus.mileage.portfolio.dto.RepoPatchRequest;
 import com.csee.swplus.mileage.portfolio.dto.RepositoriesResponse;
 import com.csee.swplus.mileage.portfolio.service.PortfolioService;
@@ -68,6 +70,17 @@ public class PortfolioRepositoriesController {
     public ResponseEntity<RepositoriesResponse> putRepositories(@Valid @RequestBody List<RepoEntryRequest> request) {
         Users user = getCurrentUser();
         return ResponseEntity.ok(portfolioService.putRepositories(user, request));
+    }
+
+    /**
+     * PATCH …/github/batch — 여러 GitHub repo id에 동일 패치 적용; 미선택 id는 링크 생성 후 보강.
+     */
+    @PatchMapping("/github/batch")
+    @Operation(summary = "레포 일괄 추가·수정 (GitHub repo id)")
+    public ResponseEntity<RepoGithubBatchPatchResponse> patchRepositoriesGithubBatch(
+            @Valid @RequestBody RepoGithubBatchPatchRequest request) {
+        Users user = getCurrentUser();
+        return ResponseEntity.ok(portfolioService.patchRepositoriesGithubBatch(user, request));
     }
 
     /**

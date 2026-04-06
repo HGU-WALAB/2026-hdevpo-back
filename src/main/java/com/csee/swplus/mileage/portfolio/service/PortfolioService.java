@@ -12,6 +12,8 @@ import com.csee.swplus.mileage.portfolio.dto.MileageListResponse;
 import com.csee.swplus.mileage.portfolio.dto.RepoEntryRequest;
 import com.csee.swplus.mileage.portfolio.dto.RepoEntryResponse;
 import com.csee.swplus.mileage.portfolio.dto.RepoLanguageDto;
+import com.csee.swplus.mileage.portfolio.dto.RepoGithubBatchPatchRequest;
+import com.csee.swplus.mileage.portfolio.dto.RepoGithubBatchPatchResponse;
 import com.csee.swplus.mileage.portfolio.dto.RepoPatchRequest;
 import com.csee.swplus.mileage.portfolio.dto.GithubRepoCacheSyncResult;
 import com.csee.swplus.mileage.portfolio.dto.RepositoriesResponse;
@@ -664,7 +666,53 @@ public class PortfolioService {
         PortfolioRepoEntry entry = portfolioRepoEntryRepository
                 .findByIdAndPortfolio_Id(id, portfolio.getId())
                 .orElseThrow(() -> new DoNotExistException("해당 레포를 찾을 수 없습니다."));
+        applyRepoPatchRequestToEntry(entry, request != null ? request : new RepoPatchRequest());
+        portfolioRepoEntryRepository.save(entry);
+        return enrichPortfolioRepoEntryWithGithub(portfolio, entry, user);
+    }
 
+    /**
+     * PATCH /api/portfolio/repositories/github/batch — 여러 GitHub {@code repo_id}에 동일 패치 적용;
+     * 아직 포트폴리오에 없는 id는 링크 행을 생성한 뒤 처리 (순서는 요청 순, 중복 id 제거).
+     */
+    public RepoGithubBatchPatchResponse patchRepositoriesGithubBatch(
+            Users user, RepoGithubBatchPatchRequest body) {
+        Portfolio portfolio = getOrCreatePortfolio(user);
+        RepoPatchRequest patch = body.getPatch() != null ? body.getPatch() : new RepoPatchRequest();
+        LinkedHashSet<Long> unique = new LinkedHashSet<>();
+        for (Long repoId : body.getRepo_ids()) {
+            if (repoId != null) {
+                unique.add(repoId);
+            }
+        }
+        if (unique.isEmpty()) {
+            throw new IllegalArgumentException("repo_ids must contain at least one non-null id.");
+        }
+        List<RepoEntryResponse> out = new ArrayList<>(unique.size());
+        for (Long repoId : unique) {
+            PortfolioRepoEntry entry = portfolioRepoEntryRepository
+                    .findByPortfolio_IdAndRepoId(portfolio.getId(), repoId)
+                    .orElseGet(() -> {
+                        int n = portfolioRepoEntryRepository
+                                .findByPortfolio_IdOrderByDisplayOrderAsc(portfolio.getId()).size();
+                        return PortfolioRepoEntry.builder()
+                                .portfolio(portfolio)
+                                .repoId(repoId)
+                                .isVisible(true)
+                                .displayOrder(n)
+                                .build();
+                    });
+            if (entry.getId() == null) {
+                entry = portfolioRepoEntryRepository.save(entry);
+            }
+            applyRepoPatchRequestToEntry(entry, patch);
+            entry = portfolioRepoEntryRepository.save(entry);
+            out.add(enrichPortfolioRepoEntryWithGithub(portfolio, entry, user));
+        }
+        return RepoGithubBatchPatchResponse.builder().repositories(out).build();
+    }
+
+    private static void applyRepoPatchRequestToEntry(PortfolioRepoEntry entry, RepoPatchRequest request) {
         if (request.getCustom_title() != null) {
             entry.setCustomTitle(request.getCustom_title());
         }
@@ -677,10 +725,10 @@ public class PortfolioService {
         if (request.getDisplay_order() != null) {
             entry.setDisplayOrder(request.getDisplay_order());
         }
+    }
 
-        portfolioRepoEntryRepository.save(entry);
-
-        // Enrich with latest GitHub info for this repo (optional, best-effort)
+    private RepoEntryResponse enrichPortfolioRepoEntryWithGithub(
+            Portfolio portfolio, PortfolioRepoEntry entry, Users user) {
         String name = null;
         String htmlUrl = null;
         String language = null;
@@ -713,9 +761,13 @@ public class PortfolioService {
                 createdAt = c != null ? c.toString() : null;
                 updatedAt = u != null ? u.toString() : null;
                 Object sc = repo.get("stargazers_count");
-                if (sc instanceof Number) stargazersCount = ((Number) sc).intValue();
+                if (sc instanceof Number) {
+                    stargazersCount = ((Number) sc).intValue();
+                }
                 Object fc = repo.get("forks_count");
-                if (fc instanceof Number) forksCount = ((Number) fc).intValue();
+                if (fc instanceof Number) {
+                    forksCount = ((Number) fc).intValue();
+                }
                 Boolean isPrivate = (Boolean) repo.get("private");
                 visibility = isPrivate != null && isPrivate ? "private" : "public";
             }
@@ -747,6 +799,7 @@ public class PortfolioService {
                 .languages(languages)
                 .created_at(createdAt)
                 .updated_at(updatedAt)
+                .visibility(visibility)
                 .owner(ownerLogin)
                 .stargazers_count(stargazersCount)
                 .forks_count(forksCount)
