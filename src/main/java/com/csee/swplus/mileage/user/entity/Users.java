@@ -86,6 +86,23 @@ public class Users extends BaseTime implements Serializable {
         log.info("Updated login count: {}, login time: {}", this.loginCount, this.login_time); // 로그 추가
     }
 
+    /**
+     * Refresh profile fields from a trusted login source (Hisnet).
+     * Does NOT touch loginCount / login_time.
+     */
+    public void updateProfileFrom(AuthDto dto) {
+        if (dto == null) {
+            return;
+        }
+        this.name = dto.getStudentName();
+        this.email = dto.getStudentEmail();
+        this.department = dto.getDepartment();
+        this.major1 = dto.getMajor1();
+        this.major2 = dto.getMajor2();
+        this.grade = dto.getGrade();
+        this.semester = dto.getTerm();
+    }
+
     public static Users from(AuthDto dto) {
         return Users.builder()
                 .uniqueId(dto.getStudentId())

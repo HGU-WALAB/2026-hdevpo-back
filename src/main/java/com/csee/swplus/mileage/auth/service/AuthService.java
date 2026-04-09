@@ -1,6 +1,5 @@
 package com.csee.swplus.mileage.auth.service;
 
-import com.csee.swplus.mileage.setting.entity.SwManagerSetting;
 import com.csee.swplus.mileage.setting.service.ManagerService;
 import com.csee.swplus.mileage.user.service.UserService;
 import lombok.extern.slf4j.Slf4j;
@@ -15,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.security.Key;
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 @Service
@@ -22,6 +22,8 @@ import java.util.Optional;
 @RequiredArgsConstructor
 @Slf4j
 public class AuthService {
+
+    private static final int PROFILE_REFRESH_MONTHS = 3;
 
     private final UserRepository userRepository;
     private final ManagerService managerService;
@@ -62,6 +64,14 @@ public class AuthService {
         } else {
             // 기존 유저 정보 업데이트
             loggedInUser = user.get();
+
+            // Refresh profile fields only when the user hasn't logged in recently.
+            LocalDateTime lastLogin = loggedInUser.getLogin_time();
+            boolean shouldRefreshProfile = lastLogin == null || lastLogin.isBefore(LocalDateTime.now().minusMonths(PROFILE_REFRESH_MONTHS));
+            if (shouldRefreshProfile) {
+                loggedInUser.updateProfileFrom(dto);
+            }
+
             loggedInUser.increaseLoginCount();
             userRepository.save(loggedInUser);
         }
@@ -71,12 +81,6 @@ public class AuthService {
                 loggedInUser.getUniqueId(),
                 loggedInUser.getName(),
                 loggedInUser.getEmail(),
-                key
-        );
-
-        String refreshToken = JwtUtil.createRefreshToken(
-                loggedInUser.getUniqueId(),
-                loggedInUser.getName(),
                 key
         );
 
