@@ -67,7 +67,8 @@ public class AuthService {
 
             // Refresh profile fields only when the user hasn't logged in recently.
             LocalDateTime lastLogin = loggedInUser.getLogin_time();
-            boolean shouldRefreshProfile = lastLogin == null || lastLogin.isBefore(LocalDateTime.now().minusMonths(PROFILE_REFRESH_MONTHS));
+            boolean shouldRefreshProfile = lastLogin == null
+                    || lastLogin.isBefore(LocalDateTime.now().minusMonths(PROFILE_REFRESH_MONTHS));
             if (shouldRefreshProfile) {
                 loggedInUser.updateProfileFrom(dto);
             }
@@ -81,14 +82,13 @@ public class AuthService {
                 loggedInUser.getUniqueId(),
                 loggedInUser.getName(),
                 loggedInUser.getEmail(),
-                key
-        );
+                key);
 
         log.info("✅ Generated access and refresh tokens for user: {}", loggedInUser.getUniqueId());
 
         // ✅ dto.getToken() 사용 ❌ → 백엔드에서 생성한 토큰 사용
         return AuthDto.builder()
-                .token(accessToken)  // 🚀 새로운 JWT 사용
+                .token(accessToken) // 🚀 새로운 JWT 사용
                 .studentId(loggedInUser.getUniqueId())
                 .studentName(loggedInUser.getName())
                 .studentEmail(loggedInUser.getEmail())
