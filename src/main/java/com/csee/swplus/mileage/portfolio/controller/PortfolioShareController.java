@@ -71,17 +71,18 @@ public class PortfolioShareController {
      * GitHub 레포 목록 — 공개 시 {@code visible_only=true} 고정 (비공개로 숨긴 레포는 제외).
      */
     @GetMapping("/{studentId}/repositories")
-    @Operation(summary = "[공개] 레포 목록", description = "visible_only는 항상 true로 적용 (숨긴 레포 미노출)")
+    @Operation(
+            summary = "[공개] 레포 목록",
+            description = "visible_only는 항상 true로 적용 (숨긴 레포 미노출). affiliation 쿼리는 지원하지 않음.")
     public ResponseEntity<RepositoriesResponse> getRepositories(
             @PathVariable String studentId,
             @RequestParam(value = "page", required = false) Integer page,
             @RequestParam(value = "per_page", required = false) Integer perPage,
             @RequestParam(value = "selected_only", required = false) Boolean selectedOnly,
             @RequestParam(value = "sort", required = false) String sort,
-            @RequestParam(value = "visibility", required = false) String visibility,
-            @RequestParam(value = "affiliation", required = false) String affiliation) {
+            @RequestParam(value = "visibility", required = false) String visibility) {
         Users user = resolveUser(studentId);
-        return ResponseEntity.ok(portfolioService.getRepositories(user, page, perPage, selectedOnly, true, sort, visibility, affiliation));
+        return ResponseEntity.ok(portfolioService.getRepositories(user, page, perPage, selectedOnly, true, sort, visibility));
     }
 
     @GetMapping("/{studentId}/mileage")

@@ -315,26 +315,26 @@ public class PortfolioService {
      * Overload for internal callers (PUT, etc.): no filters.
      */
     public RepositoriesResponse getRepositories(Users user) {
-        return getRepositories(user, 1, 100, null, null, null, null, null);
+        return getRepositories(user, 1, 100, null, null, null, null);
     }
 
     /**
      * GET /api/portfolio/repositories – GitHub 레포 목록 + (선택된 레포에 한해) 커스텀 설정 정보.
-     * Pagination: ?page=&per_page=. Filters: ?selected_only=, ?visible_only=, ?sort=, ?visibility=, ?affiliation=.
+     * Pagination: ?page=&per_page=. Filters: ?selected_only=, ?visible_only=, ?sort=, ?visibility=.
      */
     public RepositoriesResponse getRepositories(Users user, Integer page, Integer perPage,
             Boolean selectedOnly, Boolean visibleOnly) {
-        return getRepositories(user, page, perPage, selectedOnly, visibleOnly, null, null, null);
+        return getRepositories(user, page, perPage, selectedOnly, visibleOnly, null, null);
     }
 
     /**
-     * Full getRepositories with sort, visibility. When GitHub is linked, the list is read only from
+     * Full getRepositories with sort and visibility. When GitHub is linked, the list is read only from
      * {@code _sw_mileage_portfolio_github_repo_cache} (paginated in memory). Run POST …/github-cache/refresh
-     * to populate. {@code affiliation} is ignored (not stored in cache). PATCH a repo to pull fresh GitHub
-     * detail into the cache for that row.
+     * to populate. There is no affiliation filter on GET (not stored per cache row). PATCH a repo to pull fresh
+     * GitHub detail into the cache for that row.
      */
     public RepositoriesResponse getRepositories(Users user, Integer page, Integer perPage,
-            Boolean selectedOnly, Boolean visibleOnly, String sort, String visibility, String affiliation) {
+            Boolean selectedOnly, Boolean visibleOnly, String sort, String visibility) {
         int p = (page == null || page < 1) ? 1 : page;
         int limit = (perPage == null || perPage < 1) ? 30 : perPage;
         if (limit > 100) {

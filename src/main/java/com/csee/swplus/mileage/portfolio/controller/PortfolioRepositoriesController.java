@@ -35,18 +35,20 @@ public class PortfolioRepositoriesController {
      * GET — DB 캐시 페이지 목록 + (선택된 레포에 한해) 커스텀 설정. 캐시는 POST …/github-cache/refresh 로 채움.
      */
     @GetMapping
-    @Operation(summary = "GitHub 레포 목록 (캐시)", description = "DB 캐시 기반 페이지네이션. refresh로 선행 채우기.")
+    @Operation(
+            summary = "GitHub 레포 목록 (캐시)",
+            description = "DB 캐시 기반 페이지네이션. POST …/github-cache/refresh 로 선행 채우기. "
+                    + "affiliation 쿼리는 지원하지 않음(캐시 행에 저장되지 않음).")
     public ResponseEntity<RepositoriesResponse> getRepositories(
             @RequestParam(value = "page", required = false) Integer page,
             @RequestParam(value = "per_page", required = false) Integer perPage,
             @RequestParam(value = "selected_only", required = false) Boolean selectedOnly,
             @RequestParam(value = "visible_only", required = false) Boolean visibleOnly,
             @RequestParam(value = "sort", required = false) String sort,
-            @RequestParam(value = "visibility", required = false) String visibility,
-            @RequestParam(value = "affiliation", required = false) String affiliation) {
+            @RequestParam(value = "visibility", required = false) String visibility) {
         Users user = getCurrentUser();
         return ResponseEntity.ok(
-                portfolioService.getRepositories(user, page, perPage, selectedOnly, visibleOnly, sort, visibility, affiliation));
+                portfolioService.getRepositories(user, page, perPage, selectedOnly, visibleOnly, sort, visibility));
     }
 
     /**
