@@ -38,7 +38,10 @@ public class PortfolioRepositoriesController {
     @Operation(
             summary = "GitHub 레포 목록 (캐시)",
             description = "DB 캐시 기반 페이지네이션. POST …/github-cache/refresh 로 선행 채우기. "
-                    + "affiliation 쿼리는 지원하지 않음(캐시 행에 저장되지 않음).")
+                    + "affiliation 쿼리는 지원하지 않음(캐시 행에 저장되지 않음). "
+                    + "참고: GitHub REST API의 affiliation(owner/collaborator/organization_member)은 "
+                    + "GET /user/repos 목록에서 사용자·레포 관계를 나누는 필터이며, "
+                    + "‘내가 커밋한 모든 레포’를 의미하지 않음.")
     public ResponseEntity<RepositoriesResponse> getRepositories(
             @RequestParam(value = "page", required = false) Integer page,
             @RequestParam(value = "per_page", required = false) Integer perPage,

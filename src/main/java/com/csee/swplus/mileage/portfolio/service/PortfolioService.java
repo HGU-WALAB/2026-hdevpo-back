@@ -332,8 +332,10 @@ public class PortfolioService {
     /**
      * Full getRepositories with sort and visibility. When GitHub is linked, the list is read only from
      * {@code _sw_mileage_portfolio_github_repo_cache} (paginated in memory). Run POST …/github-cache/refresh
-     * to populate. There is no affiliation filter on GET (not stored per cache row). PATCH a repo to pull fresh
-     * GitHub detail into the cache for that row.
+     * to populate. This endpoint does not accept GitHub’s {@code affiliation} query (it is not stored per cache
+     * row). Separately, note that GitHub’s {@code affiliation} on {@code GET /user/repos} classifies each repo
+     * by relationship (owner / collaborator / organization member) for that <em>listing</em> API—it does not mean
+     * “every repository I have committed to.” PATCH a repo to pull fresh GitHub detail into the cache for that row.
      */
     public RepositoriesResponse getRepositories(Users user, Integer page, Integer perPage,
             Boolean selectedOnly, Boolean visibleOnly, String sort, String visibility) {
@@ -454,7 +456,10 @@ public class PortfolioService {
     }
 
     /**
-     * Fetches one page of repos from GitHub (same rules as {@link #getRepositories} list call).
+     * Fetches one page from GitHub’s list APIs. With a token: {@code GET /user/repos} including
+     * {@code affiliation} (owner, collaborator, organization_member)—GitHub’s parameter for how the
+     * authenticated user relates to each repo in this list; it is not a “commits across GitHub” filter.
+     * Without a token: {@code GET /users/{username}/repos?type=owner} (public owner repos only).
      */
     private Map[] fetchGithubReposPage(
             String githubUsername,
@@ -496,6 +501,9 @@ public class PortfolioService {
      * Cache refresh: GitHub list API only (no per-repo {@code /languages}). Upserts list fields:
      * name, url, primary language, dates, visibility, owner, stars, forks. Does not clear existing
      * {@code languages_json} on rows already enriched via PUT/PATCH.
+     * <p>
+     * When calling GitHub with an OAuth token, {@code affiliation=owner,collaborator,organization_member} is
+     * passed through; that follows GitHub’s meaning for {@code GET /user/repos}, not “all repos with my commits.”
      * <p>
      * Full language breakdown is written on {@code PUT/PATCH /portfolio/repositories} for selected repos.
      */
