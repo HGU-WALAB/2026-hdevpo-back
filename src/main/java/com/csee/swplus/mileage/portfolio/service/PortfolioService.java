@@ -47,11 +47,13 @@ import com.csee.swplus.mileage.user.entity.Users;
 import com.csee.swplus.mileage.auth.exception.DoNotExistException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
@@ -501,13 +503,39 @@ public class PortfolioService {
         Portfolio portfolio = getOrCreatePortfolio(user);
         Profile profile = profileRepository.findBySnum(user.getUniqueId()).orElse(null);
         String githubUsername = profile != null ? profile.getGithubUsername() : null;
+        List<String> warnings = new ArrayList<>();
         if (githubUsername == null || githubUsername.isEmpty()) {
-            return new GithubRepoCacheSyncResult(0);
+            warnings.add("NO_GITHUB_USERNAME: GitHub username is not set on the profile; nothing to sync.");
+            return GithubRepoCacheSyncResult.builder().reposSynced(0).warnings(warnings).build();
         }
         String githubToken = null;
-        if (tokenEncryptionKey != null && !tokenEncryptionKey.isEmpty()
-                && profile.getGithubAccessToken() != null && !profile.getGithubAccessToken().isEmpty()) {
+        boolean hasEncryptedToken =
+                profile.getGithubAccessToken() != null && !profile.getGithubAccessToken().isEmpty();
+        if (tokenEncryptionKey == null || tokenEncryptionKey.isEmpty()) {
+            if (hasEncryptedToken) {
+                warnings.add(
+                        "GITHUB_TOKEN_KEY_MISSING: github.token-encryption-key is not configured; "
+                                + "stored token cannot be decrypted. Using public GET /users/{username}/repos?type=owner only.");
+            } else {
+                warnings.add(
+                        "NO_GITHUB_TOKEN: No linked GitHub OAuth token; using public "
+                                + "GET /users/{username}/repos?type=owner (owner-visible public repos only).");
+            }
+        } else if (hasEncryptedToken) {
             githubToken = TokenEncryptionUtil.decrypt(profile.getGithubAccessToken(), tokenEncryptionKey);
+            if (githubToken == null || githubToken.isEmpty()) {
+                warnings.add(
+                        "GITHUB_TOKEN_UNAVAILABLE: Token could not be decrypted or is empty; "
+                                + "using public GET /users/{username}/repos?type=owner.");
+                githubToken = null;
+            }
+        } else {
+            warnings.add(
+                    "NO_GITHUB_TOKEN: No linked GitHub OAuth token; using public "
+                            + "GET /users/{username}/repos?type=owner (owner-visible public repos only).");
+        }
+        if (githubToken != null && !githubToken.isEmpty()) {
+            addGithubTokenProbeWarnings(githubToken, warnings);
         }
         String sortParam = "updated";
         String visibilityParam = "all";
@@ -579,7 +607,36 @@ public class PortfolioService {
                 synced++;
             }
         }
-        return new GithubRepoCacheSyncResult(synced);
+        return GithubRepoCacheSyncResult.builder().reposSynced(synced).warnings(warnings).build();
+    }
+
+    /**
+     * Optional GET /user to surface auth/scope issues without failing the whole refresh.
+     */
+    private void addGithubTokenProbeWarnings(String githubToken, List<String> warnings) {
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.setBearerAuth(githubToken);
+            headers.setAccept(Collections.singletonList(MediaType.APPLICATION_JSON));
+            HttpEntity<Void> req = new HttpEntity<>(headers);
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                    githubApiBaseUrl + "/user",
+                    HttpMethod.GET,
+                    req,
+                    new ParameterizedTypeReference<Map<String, Object>>() {});
+            String scopes = response.getHeaders().getFirst("X-OAuth-Scopes");
+            if (scopes != null && !scopes.trim().isEmpty() && !scopes.contains("repo")) {
+                warnings.add(
+                        "GITHUB_SCOPE: OAuth token does not include the `repo` scope; private repositories may be omitted. "
+                                + "Fine-grained personal access tokens use repository permissions instead of classic scopes.");
+            }
+        } catch (HttpClientErrorException.Unauthorized e) {
+            warnings.add(
+                    "GITHUB_UNAUTHORIZED: GitHub returned 401 for GET /user; token may be expired or revoked. "
+                            + "Repo list may be incomplete—re-authorize GitHub.");
+        } catch (Exception ignored) {
+            // best-effort probe only
+        }
     }
 
     private String resolveGithubToken(Users user) {

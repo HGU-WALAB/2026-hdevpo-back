@@ -56,7 +56,8 @@ public class PortfolioRepositoriesController {
      */
     @PostMapping("/github-cache/refresh")
     @Operation(summary = "GitHub 레포 메타 캐시 갱신",
-            description = "GitHub list API만 사용. 상세·languages는 PUT/PATCH에서 보강.")
+            description = "GitHub list API만 사용. 상세·languages는 PUT/PATCH에서 보강. "
+                    + "응답의 warnings 배열에 토큰/공개 API 한계 등을 영문 코드 접두어(예: NO_GITHUB_TOKEN)로 포함할 수 있음.")
     public ResponseEntity<GithubRepoCacheSyncResult> refreshGithubRepoCache() {
         Users user = getCurrentUser();
         return ResponseEntity.ok(portfolioService.refreshGithubRepositoriesCache(user));
