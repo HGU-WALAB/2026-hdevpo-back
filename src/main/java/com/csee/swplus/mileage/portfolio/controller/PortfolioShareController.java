@@ -73,7 +73,9 @@ public class PortfolioShareController {
     @GetMapping("/{studentId}/repositories")
     @Operation(
             summary = "[공개] 레포 목록",
-            description = "visible_only는 항상 true로 적용 (숨긴 레포 미노출). affiliation 쿼리는 지원하지 않음. "
+            description = "visible_only는 항상 true로 적용 (숨긴 레포 미노출). "
+                    + "search: 캐시 레포 메타·커스텀 제목 등 부분 일치(공백 AND). "
+                    + "affiliation 쿼리는 지원하지 않음. "
                     + "GitHub API의 affiliation은 목록 API에서의 관계 필터이며 ‘커밋 이력이 있는 모든 레포’와 동일하지 않음.")
     public ResponseEntity<RepositoriesResponse> getRepositories(
             @PathVariable String studentId,
@@ -81,9 +83,11 @@ public class PortfolioShareController {
             @RequestParam(value = "per_page", required = false) Integer perPage,
             @RequestParam(value = "selected_only", required = false) Boolean selectedOnly,
             @RequestParam(value = "sort", required = false) String sort,
-            @RequestParam(value = "visibility", required = false) String visibility) {
+            @RequestParam(value = "visibility", required = false) String visibility,
+            @RequestParam(value = "search", required = false) String search) {
         Users user = resolveUser(studentId);
-        return ResponseEntity.ok(portfolioService.getRepositories(user, page, perPage, selectedOnly, true, sort, visibility));
+        return ResponseEntity.ok(
+                portfolioService.getRepositories(user, page, perPage, selectedOnly, true, sort, visibility, search));
     }
 
     @GetMapping("/{studentId}/mileage")

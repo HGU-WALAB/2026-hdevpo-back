@@ -100,7 +100,9 @@ public class PortfolioHtmlExportService {
         sb.append("[github_repos]\n");
         if (repos.getRepositories() != null) {
             for (RepoEntryResponse r : repos.getRepositories()) {
-                String title = r.getCustom_title() != null && !r.getCustom_title().isEmpty() ? r.getCustom_title() : r.getName();
+                String title = r.getCustom_title() != null && !r.getCustom_title().isEmpty()
+                        ? r.getCustom_title()
+                        : r.getGithub_title();
                 if (title == null) title = "Repository";
                 String desc = repoDisplayDescription(r);
                 String langStr = formatRepoLanguages(r);
@@ -213,7 +215,9 @@ public class PortfolioHtmlExportService {
         if (repos.getRepositories() != null) {
             for (RepoEntryResponse r : repos.getRepositories()) {
                 if (r.getId() == null || !repoIds.contains(r.getId())) continue;
-                String title = r.getCustom_title() != null && !r.getCustom_title().isEmpty() ? r.getCustom_title() : r.getName();
+                String title = r.getCustom_title() != null && !r.getCustom_title().isEmpty()
+                        ? r.getCustom_title()
+                        : r.getGithub_title();
                 if (title == null) title = "Repository";
                 String desc = repoDisplayDescription(r);
                 String langStr = formatRepoLanguages(r);
@@ -494,7 +498,8 @@ public class PortfolioHtmlExportService {
                     continue;
                 }
                 String repoTitle = r.getCustom_title() != null && !r.getCustom_title().trim().isEmpty()
-                        ? r.getCustom_title().trim() : r.getName();
+                        ? r.getCustom_title().trim()
+                        : r.getGithub_title();
                 if (repoTitle == null || repoTitle.trim().isEmpty()) {
                     repoTitle = "Repository";
                 }

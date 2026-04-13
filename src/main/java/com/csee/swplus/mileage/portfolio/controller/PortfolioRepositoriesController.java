@@ -38,20 +38,22 @@ public class PortfolioRepositoriesController {
     @Operation(
             summary = "GitHub 레포 목록 (캐시)",
             description = "DB 캐시 기반 페이지네이션. POST …/github-cache/refresh 로 선행 채우기. "
+                    + "search: 레포 이름·owner·URL·설명·언어·repo_id·커스텀 제목/설명 부분 일치(공백으로 AND). "
                     + "affiliation 쿼리는 지원하지 않음(캐시 행에 저장되지 않음). "
-                    + "참고: GitHub REST API의 affiliation(owner/collaborator/organization_member)은 "
-                    + "GET /user/repos 목록에서 사용자·레포 관계를 나누는 필터이며, "
-                    + "‘내가 커밋한 모든 레포’를 의미하지 않음.")
+                    + "캐시 갱신 시 GitHub에는 affiliation=owner,collaborator 만 사용(organization_member 제외). "
+                    + "참고: GitHub affiliation 파라미터는 목록 API에서의 관계 필터이며 ‘커밋한 모든 레포’와 같지 않음.")
     public ResponseEntity<RepositoriesResponse> getRepositories(
             @RequestParam(value = "page", required = false) Integer page,
             @RequestParam(value = "per_page", required = false) Integer perPage,
             @RequestParam(value = "selected_only", required = false) Boolean selectedOnly,
             @RequestParam(value = "visible_only", required = false) Boolean visibleOnly,
             @RequestParam(value = "sort", required = false) String sort,
-            @RequestParam(value = "visibility", required = false) String visibility) {
+            @RequestParam(value = "visibility", required = false) String visibility,
+            @RequestParam(value = "search", required = false) String search) {
         Users user = getCurrentUser();
         return ResponseEntity.ok(
-                portfolioService.getRepositories(user, page, perPage, selectedOnly, visibleOnly, sort, visibility));
+                portfolioService.getRepositories(
+                        user, page, perPage, selectedOnly, visibleOnly, sort, visibility, search));
     }
 
     /**
@@ -59,8 +61,8 @@ public class PortfolioRepositoriesController {
      */
     @PostMapping("/github-cache/refresh")
     @Operation(summary = "GitHub 레포 메타 캐시 갱신",
-            description = "GitHub list API만 사용. 상세·languages는 PUT/PATCH에서 보강. "
-                    + "응답의 warnings 배열에 토큰/공개 API 한계 등을 영문 코드 접두어(예: NO_GITHUB_TOKEN)로 포함할 수 있음.")
+            description = "GitHub list API + (토큰 시) commit search로 기여 레포 병합. 상세·languages는 PUT/PATCH에서 보강. "
+                    + "warnings: NO_GITHUB_TOKEN, CONTRIBUTOR_SEARCH_TRUNCATED, CONTRIBUTOR_SEARCH_FAILED 등.")
     public ResponseEntity<GithubRepoCacheSyncResult> refreshGithubRepoCache() {
         Users user = getCurrentUser();
         return ResponseEntity.ok(portfolioService.refreshGithubRepositoriesCache(user));
