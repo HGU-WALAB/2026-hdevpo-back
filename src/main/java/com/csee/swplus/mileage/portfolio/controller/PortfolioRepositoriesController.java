@@ -37,7 +37,7 @@ public class PortfolioRepositoriesController {
     @GetMapping
     @Operation(
             summary = "GitHub 레포 목록 (캐시)",
-            description = "DB 캐시 기반 페이지네이션. POST …/github-cache/refresh 로 선행 채우기. "
+            description = "DB 캐시 기반. visible_only=true이면 page/per_page 무시·표시 레포 전부 반환, 아니면 페이지네이션. POST …/github-cache/refresh 로 선행 채우기. "
                     + "search: 레포 이름·owner·URL·설명·언어·repo_id·커스텀 제목/설명 부분 일치(공백으로 AND). "
                     + "affiliation 쿼리는 지원하지 않음(캐시 행에 저장되지 않음). "
                     + "캐시 갱신 시 GitHub에는 affiliation=owner,collaborator 만 사용(organization_member 제외). "

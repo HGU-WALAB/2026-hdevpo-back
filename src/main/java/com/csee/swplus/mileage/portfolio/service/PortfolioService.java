@@ -331,9 +331,11 @@ public class PortfolioService {
 
     /**
      * Full getRepositories with sort and visibility. When GitHub is linked, the list is read only from
-     * {@code _sw_mileage_portfolio_github_repo_cache} (paginated in memory). Run POST …/github-cache/refresh
-     * to populate. Optional {@code search} filters cached rows (repo name, owner, URL, description, language,
-     * repo id, custom title / description on linked portfolio entries) before sort and pagination.
+     * {@code _sw_mileage_portfolio_github_repo_cache} (paginated in memory unless {@code visible_only=true},
+     * in which case {@code page} / {@code per_page} are ignored and all visible portfolio repos are returned).
+     * Run POST …/github-cache/refresh to populate. Optional {@code search} filters cached rows
+     * (repo name, owner, URL, description, language, repo id, custom title / description on linked portfolio
+     * entries) before sort and pagination (or before returning the full visible-only list).
      * This endpoint does not accept GitHub’s {@code affiliation} query (it is not stored per cache
      * row). Separately, note that GitHub’s {@code affiliation} on {@code GET /user/repos} classifies each repo
      * by relationship (owner / collaborator / organization member) for that <em>listing</em> API—it does not mean
@@ -398,10 +400,14 @@ public class PortfolioService {
                         Comparator.nullsLast(Comparator.reverseOrder()));
             }
             filtered.sort(cmp);
-            int from = (p - 1) * limit;
-            int to = Math.min(from + limit, filtered.size());
-            List<PortfolioGithubRepoCache> pageRows =
-                    from >= filtered.size() ? Collections.emptyList() : filtered.subList(from, to);
+            List<PortfolioGithubRepoCache> pageRows;
+            if (Boolean.TRUE.equals(visibleOnly)) {
+                pageRows = filtered;
+            } else {
+                int from = (p - 1) * limit;
+                int to = Math.min(from + limit, filtered.size());
+                pageRows = from >= filtered.size() ? Collections.emptyList() : filtered.subList(from, to);
+            }
 
             for (PortfolioGithubRepoCache c : pageRows) {
                 long repoId = c.getRepoId();

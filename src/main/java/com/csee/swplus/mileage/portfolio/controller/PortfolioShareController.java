@@ -73,7 +73,7 @@ public class PortfolioShareController {
     @GetMapping("/{studentId}/repositories")
     @Operation(
             summary = "[공개] 레포 목록",
-            description = "visible_only는 항상 true로 적용 (숨긴 레포 미노출). "
+            description = "visible_only is fixed (hidden repos excluded). page and per_page are ignored; the full visible list is returned. "
                     + "search: 캐시 레포 메타·커스텀 제목 등 부분 일치(공백 AND). "
                     + "affiliation 쿼리는 지원하지 않음. "
                     + "GitHub API의 affiliation은 목록 API에서의 관계 필터이며 ‘커밋 이력이 있는 모든 레포’와 동일하지 않음.")
