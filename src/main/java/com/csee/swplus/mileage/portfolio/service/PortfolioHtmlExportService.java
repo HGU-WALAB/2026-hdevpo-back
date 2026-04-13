@@ -19,16 +19,23 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
  * Exports portfolio data as a single-file HTML page (recruiter-optimized, print-friendly).
- * Follows classic resume/portfolio style with Noto Sans KR, navy accent.
+ * **blueStyle** layout: sidebar (name, role, school, meta-line, summary-chip, tech pills, contact) +
+ * main (About, Projects, Mileage & extracurricular timeline, optional Achievements, Activities, footer).
+ * LLM prompts ({@link #buildCvPromptTail()}, {@link #buildArchivePromptTail()}) require the same structure/class names for generated HTML.
  */
 @Service
 @RequiredArgsConstructor
 public class PortfolioHtmlExportService {
+
+    /** Mileage / activity text that likely denotes an award (for ACHIEVEMENTS section, blueStyle). */
 
     private final PortfolioService portfolioService;
     private final ProfileRepository profileRepository;
@@ -163,7 +170,7 @@ public class PortfolioHtmlExportService {
      */
     public String buildFullPrompt(Users user) {
         String inputData = buildPromptInputData(user);
-        return PROMPT_HEAD + inputData + PROMPT_TAIL;
+        return PROMPT_HEAD + inputData + buildCvPromptTail();
     }
 
     /**
@@ -271,7 +278,141 @@ public class PortfolioHtmlExportService {
         sb.append("- GitHub URL: ").append(githubUrl != null ? githubUrl : "").append("\n");
         sb.append("- Email: ").append(email != null ? email : "").append("\n");
 
-        return PROMPT_HEAD + sb.toString() + PROMPT_TAIL;
+        return PROMPT_HEAD + sb.toString() + buildCvPromptTail();
+    }
+
+    /**
+     * Reflective “archive” prompt: neutral tone, one-shot HTML, chronological/category ordering in STEP 2.
+     * Same data sources and selection IDs as {@link #buildCvPrompt}; uses {@link #ARCHIVE_PROMPT_HEAD} / {@link #buildArchivePromptTail()} only.
+     */
+    public String buildArchivePrompt(Users user, CvBuildPromptRequest request) {
+        Set<Long> repoIds = request.getSelected_repo_ids() != null
+                ? new HashSet<>(request.getSelected_repo_ids()) : Collections.emptySet();
+        Set<Long> mileageIds = request.getSelected_mileage_ids() != null
+                ? new HashSet<>(request.getSelected_mileage_ids()) : Collections.emptySet();
+        Set<Long> activityIds = request.getSelected_activity_ids() != null
+                ? new HashSet<>(request.getSelected_activity_ids()) : Collections.emptySet();
+
+        UserInfoResponse userInfo = portfolioService.getUserInfo(user);
+        TechStackResponse techStack = portfolioService.getTechStack(user);
+        RepositoriesResponse repos = portfolioService.getRepositories(user, 1, 100, true, false);
+        MileageListResponse mileage = portfolioService.getMileageList(user);
+        ActivitiesResponse activities = portfolioService.getActivities(user, null);
+
+        String githubUrl = null;
+        Profile profile = profileRepository.findBySnum(user.getUniqueId()).orElse(null);
+        if (profile != null && profile.getGithubLink() != null && !profile.getGithubLink().isEmpty()) {
+            githubUrl = profile.getGithubLink();
+        } else if (profile != null && profile.getGithubUsername() != null) {
+            githubUrl = "https://github.com/" + profile.getGithubUsername();
+        }
+        String email = user.getEmail();
+
+        List<MileageEntryResponse> mileageList = new ArrayList<>();
+        if (mileage.getMileage() != null) {
+            for (MileageEntryResponse m : mileage.getMileage()) {
+                if (m.getId() != null && mileageIds.contains(m.getId())) {
+                    mileageList.add(m);
+                }
+            }
+        }
+        mileageList.sort(Comparator
+                .comparing((MileageEntryResponse m) -> m.getSemester() != null ? m.getSemester() : "\uFFFF")
+                .thenComparing(m -> nullToEmpty(m.getCategoryName()))
+                .thenComparing(m -> nullToEmpty(m.getSubitemName())));
+
+        List<ActivityResponse> activityList = new ArrayList<>();
+        if (activities.getActivities() != null) {
+            for (ActivityResponse a : activities.getActivities()) {
+                if (a.getId() != null && activityIds.contains(a.getId())) {
+                    activityList.add(a);
+                }
+            }
+        }
+        activityList.sort(Comparator.comparing(ActivityResponse::getStart_date, Comparator.nullsLast(Comparator.naturalOrder())));
+
+        List<RepoEntryResponse> repoList = new ArrayList<>();
+        if (repos.getRepositories() != null) {
+            for (RepoEntryResponse r : repos.getRepositories()) {
+                if (r.getId() != null && repoIds.contains(r.getId())) {
+                    repoList.add(r);
+                }
+            }
+        }
+        repoList.sort(Comparator.comparing(
+                (RepoEntryResponse r) -> r.getUpdated_at() != null ? r.getUpdated_at() : "",
+                Comparator.reverseOrder()));
+
+        StringBuilder sb = new StringBuilder();
+
+        sb.append("[self_assessment_context]\n");
+        sb.append("- 관심 영역 (현재 관심·탐색 방향; 요청 필드 job_posting): ").append(nullToEmpty(request.getJob_posting())).append("\n");
+        sb.append("- 초점·방향: ").append(nullToEmpty(request.getTarget_position())).append("\n");
+        sb.append("- 추가 메모: ").append(nullToEmpty(request.getAdditional_notes())).append("\n\n");
+
+        sb.append("[bio]\n");
+        sb.append("- 이름: ").append(nullToEmpty(userInfo.getName())).append("\n");
+        sb.append("- 학교/학과: ").append(schoolDept(userInfo)).append("\n");
+        sb.append("- 학년/학기: (").append(nullToEmpty(userInfo.getGrade())).append("학년 ")
+          .append(nullToEmpty(userInfo.getSemester())).append("학기)\n");
+        sb.append("- 한줄 자기소개: ").append(nullToEmpty(userInfo.getBio())).append("\n");
+        appendProfileLinksLines(sb, userInfo);
+        sb.append("\n");
+
+        appendTechStackPlainText(sb, techStack);
+
+        sb.append("[mileage_list]\n");
+        for (MileageEntryResponse m : mileageList) {
+            String sem = nullToEmpty(m.getSemester());
+            String cat = nullToEmpty(m.getCategoryName());
+            String sub = nullToEmpty(m.getSubitemName());
+            String add = m.getAdditional_info() != null && !m.getAdditional_info().isEmpty()
+                    ? m.getAdditional_info() : nullToEmpty(m.getDescription1());
+            sb.append("- ").append(sem).append(" ").append(cat).append(" - ").append(sub)
+              .append(" · ").append(add).append("\n");
+        }
+        sb.append("\n");
+
+        sb.append("[activities]\n");
+        for (ActivityResponse a : activityList) {
+            String title = nullToEmpty(a.getTitle());
+            String desc = nullToEmpty(a.getDescription());
+            String start = a.getStart_date() != null ? a.getStart_date().toString() : "";
+            String end = a.getEnd_date() != null ? a.getEnd_date().toString() : "";
+            sb.append("- ").append(title).append(" (").append(start).append(" ~ ").append(end).append(")");
+            if (!desc.isEmpty()) sb.append(" · ").append(desc);
+            if (a.getUrl() != null && !a.getUrl().trim().isEmpty()) {
+                sb.append(" · URL: ").append(a.getUrl().trim());
+            }
+            if (a.getTags() != null && !a.getTags().isEmpty()) {
+                sb.append(" · tags: ").append(String.join(", ", a.getTags()));
+            }
+            sb.append("\n");
+        }
+        sb.append("\n");
+
+        sb.append("[github_repos]\n");
+        for (RepoEntryResponse r : repoList) {
+            String title = r.getCustom_title() != null && !r.getCustom_title().isEmpty()
+                    ? r.getCustom_title()
+                    : r.getGithub_title();
+            if (title == null) title = "Repository";
+            String desc = repoDisplayDescription(r);
+            String langStr = formatRepoLanguages(r);
+            if (!langStr.isEmpty()) langStr = " (" + langStr + ")";
+            String commitStr = (r.getCommit_count() != null) ? " " + r.getCommit_count() + " commits" : "";
+            String starStr = (r.getStargazers_count() != null) ? " " + r.getStargazers_count() + " stars" : "";
+            String forkStr = (r.getForks_count() != null) ? " " + r.getForks_count() + " forks" : "";
+            sb.append("- ").append(title).append(" - ").append(desc).append(langStr).append(commitStr).append(starStr).append(forkStr).append("\n");
+            if (r.getHtml_url() != null) sb.append(r.getHtml_url()).append("\n");
+        }
+        sb.append("\n");
+
+        sb.append("[contact]\n");
+        sb.append("- GitHub URL: ").append(githubUrl != null ? githubUrl : "").append("\n");
+        sb.append("- Email: ").append(email != null ? email : "").append("\n");
+
+        return ARCHIVE_PROMPT_HEAD + sb.toString() + buildArchivePromptTail();
     }
 
     private String repoDisplayDescription(RepoEntryResponse r) {
@@ -346,10 +487,12 @@ public class PortfolioHtmlExportService {
             List<ActivityResponse> activities, String githubUrl, String email) {
 
         String name = escape(userInfo.getName());
-        String schoolDeptEsc = escape(schoolDept(userInfo));
+        String schoolDeptEsc = escape(schoolDeptSansGrade(userInfo));
         List<String> bioParagraphs = splitBioParagraphs(userInfo.getBio());
-        String roleLine = bioParagraphs.isEmpty() ? "" : bioParagraphs.get(0);
-        String summaryChip = roleLine;
+        String[] roleSummary = deriveRoleAndSummaryChip(bioParagraphs);
+        String roleLine = roleSummary[0];
+        String summaryChip = roleSummary[1];
+        List<String> aboutParas = buildBlueStyleAboutParagraphs(bioParagraphs);
 
         String metaLine = buildMetaLine(userInfo);
         String profileImgSrc = buildProfileImageSrc(userInfo);
@@ -402,12 +545,22 @@ public class PortfolioHtmlExportService {
             sb.append("                  <div class=\"section-title\" style=\"font-size: 13px;\">TECH STACK</div>\n");
             sb.append("                </div>\n");
             sb.append("              </div>\n");
-            sb.append("              <div class=\"pill-group\">\n");
             for (TechStackDomainResponse d : techStack.getDomains()) {
                 if (d == null || d.getTech_stacks() == null) {
                     continue;
                 }
                 String dn = d.getName() != null ? d.getName().trim() : "";
+                boolean hasAny = d.getTech_stacks().stream()
+                        .anyMatch(t -> t != null && t.getName() != null && !t.getName().trim().isEmpty());
+                if (!hasAny) {
+                    continue;
+                }
+                if (!dn.isEmpty()) {
+                    sb.append("              <div class=\"section-subtitle\" style=\"margin:8px 0 6px;\">")
+                            .append(escape(dn))
+                            .append("</div>\n");
+                }
+                sb.append("              <div class=\"pill-group\" style=\"margin-bottom:10px;\">\n");
                 for (TechStackEntryResponse t : d.getTech_stacks()) {
                     if (t == null) {
                         continue;
@@ -417,30 +570,31 @@ public class PortfolioHtmlExportService {
                         continue;
                     }
                     StringBuilder pillText = new StringBuilder(techName);
-                    if (!dn.isEmpty()) {
-                        pillText.append(" · ").append(dn);
-                    }
                     if (t.getLevel() != null) {
                         pillText.append(" ").append(t.getLevel()).append("%");
                     }
                     sb.append("                <div class=\"pill\">").append(escape(pillText.toString())).append("</div>\n");
                 }
+                sb.append("              </div>\n");
             }
-            sb.append("              </div>\n");
             sb.append("            </div>\n");
         }
 
-        if ((email != null && !email.trim().isEmpty()) || (githubUrl != null && !githubUrl.trim().isEmpty())) {
+        boolean hasEmail = email != null && !email.trim().isEmpty();
+        boolean hasGithub = githubUrl != null && !githubUrl.trim().isEmpty();
+        boolean hasProfileLinks = userInfo.getProfile_links() != null && !userInfo.getProfile_links().isEmpty();
+
+        if (hasEmail || hasGithub || hasProfileLinks) {
             sb.append("            <div class=\"contact-block\">\n");
             sb.append("              <div class=\"contact-label\">Contact</div>\n");
-            if (email != null && !email.trim().isEmpty()) {
+            if (hasEmail) {
                 String emailEsc = escape(email.trim());
                 sb.append("              <div class=\"contact-item\">\n");
                 sb.append("                <span class=\"icon\">📧</span>\n");
                 sb.append("                <a href=\"mailto:").append(emailEsc).append("\">").append(emailEsc).append("</a>\n");
                 sb.append("              </div>\n");
             }
-            if (githubUrl != null && !githubUrl.trim().isEmpty()) {
+            if (hasGithub) {
                 String gh = githubUrl.trim();
                 sb.append("              <div class=\"contact-item\">\n");
                 sb.append("                <span class=\"icon\">🐙</span>\n");
@@ -450,6 +604,32 @@ public class PortfolioHtmlExportService {
                 sb.append("                </a>\n");
                 sb.append("              </div>\n");
             }
+            if (hasProfileLinks) {
+                for (ProfileLinkDto p : userInfo.getProfile_links()) {
+                    if (p == null) {
+                        continue;
+                    }
+                    String rawUrl = p.getUrl() != null ? p.getUrl().trim() : "";
+                    if (rawUrl.isEmpty()) {
+                        continue;
+                    }
+                    String href = normalizeExternalHttpUrl(rawUrl);
+                    if (href == null) {
+                        continue;
+                    }
+                    String label = p.getLabel() != null && !p.getLabel().trim().isEmpty()
+                            ? p.getLabel().trim()
+                            : "Link";
+                    sb.append("              <div class=\"contact-item\">\n");
+                    sb.append("                <span class=\"icon\">🔗</span>\n");
+                    sb.append("                <a href=\"").append(escape(href))
+                            .append("\" class=\"link-chip\" target=\"_blank\" rel=\"noreferrer\">\n");
+                    sb.append("                  <span>").append(escape(label)).append("</span>\n");
+                    sb.append("                  <span>").append(escape(toUrlDisplayText(href))).append("</span>\n");
+                    sb.append("                </a>\n");
+                    sb.append("              </div>\n");
+                }
+            }
             sb.append("            </div>\n");
         }
 
@@ -458,7 +638,7 @@ public class PortfolioHtmlExportService {
 
         sb.append("        <main class=\"main\">\n");
 
-        if (bioParagraphs != null && !bioParagraphs.isEmpty()) {
+        if (!aboutParas.isEmpty()) {
             sb.append("          <section class=\"section\">\n");
             sb.append("            <div class=\"section-header\">\n");
             sb.append("              <div class=\"section-marker\"></div>\n");
@@ -468,7 +648,7 @@ public class PortfolioHtmlExportService {
             sb.append("              </div>\n");
             sb.append("            </div>\n");
             sb.append("            <div class=\"section-body about-text\">\n");
-            for (String p : bioParagraphs) {
+            for (String p : aboutParas) {
                 if (p == null) {
                     continue;
                 }
@@ -505,10 +685,11 @@ public class PortfolioHtmlExportService {
                 }
                 String desc = repoDisplayDescription(r);
                 String link = r.getHtml_url() != null ? r.getHtml_url().trim() : "#";
+                String repoMeta = buildRepoDateRangeText(r.getCreated_at(), r.getUpdated_at());
                 sb.append("                <article class=\"project-card\">\n");
                 sb.append("                  <div class=\"project-header\">\n");
                 sb.append("                    <div class=\"project-name\">").append(escape(repoTitle)).append("</div>\n");
-                sb.append("                    <div class=\"project-meta\">GitHub 레포지토리</div>\n");
+                sb.append("                    <div class=\"project-meta\">").append(escape(repoMeta)).append("</div>\n");
                 sb.append("                  </div>\n");
                 sb.append("                  <div class=\"project-desc\">").append(escape(desc)).append("</div>\n");
                 sb.append("                  <div class=\"project-footer\">\n");
@@ -594,6 +775,51 @@ public class PortfolioHtmlExportService {
             sb.append("          </section>\n");
         }
 
+        List<MileageEntryResponse> awardMileages = new ArrayList<>();
+        if (mileageList != null) {
+            for (MileageEntryResponse m : mileageList) {
+                if (m != null && mileageLooksLikeAward(m)) {
+                    awardMileages.add(m);
+                }
+            }
+        }
+        if (!awardMileages.isEmpty()) {
+            sb.append("          <section class=\"section\">\n");
+            sb.append("            <div class=\"section-header\">\n");
+            sb.append("              <div class=\"section-marker\"></div>\n");
+            sb.append("              <div>\n");
+            sb.append("                <div class=\"section-title\">ACHIEVEMENTS</div>\n");
+            sb.append("                <div class=\"section-subtitle\">수상 · 대외 성과</div>\n");
+            sb.append("              </div>\n");
+            sb.append("            </div>\n");
+            sb.append("            <div class=\"section-body\">\n");
+            sb.append("              <div class=\"achievements-box\">\n");
+            sb.append("                <div class=\"achievements-title\"><span>\uD83C\uDFC6</span> Highlights</div>\n");
+            sb.append("                <ul class=\"achievements-list\">\n");
+            for (MileageEntryResponse m : awardMileages) {
+                String sem = m.getSemester() != null ? m.getSemester().trim() : "";
+                String sub = m.getSubitemName() != null ? m.getSubitemName().trim() : "";
+                String cat = m.getCategoryName() != null ? m.getCategoryName().trim() : "";
+                String line = buildMileageDateText(sem, cat);
+                if (!sub.isEmpty()) {
+                    line = line.isEmpty() ? sub : sub + " — " + line;
+                }
+                String desc = buildMileageDescText(
+                        m.getAdditional_info() != null ? m.getAdditional_info().trim() : "",
+                        m.getDescription1() != null ? m.getDescription1().trim() : "");
+                if (!desc.isEmpty()) {
+                    line += ": " + desc;
+                }
+                if (!line.trim().isEmpty()) {
+                    sb.append("                  <li>").append(escape(line.trim())).append("</li>\n");
+                }
+            }
+            sb.append("                </ul>\n");
+            sb.append("              </div>\n");
+            sb.append("            </div>\n");
+            sb.append("          </section>\n");
+        }
+
         if (activities != null && !activities.isEmpty()) {
             sb.append("          <section class=\"section\">\n");
             sb.append("            <div class=\"section-header\">\n");
@@ -673,6 +899,56 @@ public class PortfolioHtmlExportService {
         }
     }
 
+    /** blueStyle: `.role` and `.summary-chip` from [bio] blocks (first / second segment or first line / rest). */
+    private static String[] deriveRoleAndSummaryChip(List<String> paras) {
+        if (paras == null || paras.isEmpty()) {
+            return new String[] { "", "" };
+        }
+        if (paras.size() >= 2) {
+            return new String[] { paras.get(0).trim(), paras.get(1).trim() };
+        }
+        String one = paras.get(0);
+        int nl = one.indexOf('\n');
+        if (nl > 0) {
+            return new String[] { one.substring(0, nl).trim(), one.substring(nl + 1).trim() };
+        }
+        String t = one.trim();
+        return new String[] { t, t };
+    }
+
+    /** ABOUT ME paragraphs: from second segment onward (duplicates summary line when3+ segments), blueStyle. */
+    private static List<String> buildBlueStyleAboutParagraphs(List<String> paras) {
+        List<String> about = new ArrayList<>();
+        if (paras == null || paras.isEmpty()) {
+            return about;
+        }
+        if (paras.size() >= 3) {
+            for (int i = 1; i < paras.size(); i++) {
+                about.add(paras.get(i).trim());
+            }
+        } else if (paras.size() == 2) {
+            about.add(paras.get(1).trim());
+        } else {
+            String one = paras.get(0);
+            int nl = one.indexOf('\n');
+            if (nl > 0) {
+                String after = one.substring(nl + 1).trim();
+                for (String line : after.split("\\r?\\n")) {
+                    String t = line.trim();
+                    if (!t.isEmpty()) {
+                        about.add(t);
+                    }
+                }
+                if (about.isEmpty() && !after.isEmpty()) {
+                    about.add(after);
+                }
+            } else {
+                about.add(one.trim());
+            }
+        }
+        return about;
+    }
+
     private List<String> splitBioParagraphs(String bio) {
         if (bio == null) {
             return Collections.emptyList();
@@ -749,6 +1025,35 @@ public class PortfolioHtmlExportService {
         return !a.isEmpty() ? a : d;
     }
 
+    private String buildRepoDateRangeText(String createdAt, String updatedAt) {
+        String c = isoDatePrefixOrEmpty(createdAt);
+        String u = isoDatePrefixOrEmpty(updatedAt);
+        if (c.isEmpty() && u.isEmpty()) {
+            return "GitHub 레포지토리";
+        }
+        if (!c.isEmpty() && u.isEmpty()) {
+            return c;
+        }
+        if (c.isEmpty() && !u.isEmpty()) {
+            return u;
+        }
+        if (c.equals(u)) {
+            return c;
+        }
+        return c + " → " + u;
+    }
+
+    private String isoDatePrefixOrEmpty(String s) {
+        if (s == null) {
+            return "";
+        }
+        String t = s.trim();
+        if (t.isEmpty()) {
+            return "";
+        }
+        return t.length() >= 10 ? t.substring(0, 10) : t;
+    }
+
     private String toGithubDisplayText(String githubUrl) {
         if (githubUrl == null) {
             return "";
@@ -773,6 +1078,63 @@ public class PortfolioHtmlExportService {
         return trimmed;
     }
 
+    private String toUrlDisplayText(String url) {
+        if (url == null) {
+            return "";
+        }
+        String trimmed = url.trim();
+        if (trimmed.isEmpty()) {
+            return "";
+        }
+        try {
+            URL u = new URL(trimmed);
+            String host = u.getHost() != null ? u.getHost() : "";
+            String path = u.getPath() != null ? u.getPath() : "";
+            if (!host.isEmpty()) {
+                if (path == null || path.isEmpty() || "/".equals(path)) {
+                    return host;
+                }
+                return host + path;
+            }
+        } catch (MalformedURLException ignored) {
+            /* fall through */
+        }
+        return trimmed;
+    }
+
+    /**
+     * Returns a safe http(s) URL for use in {@code href}, or null if not usable.
+     * Accepts URLs without scheme and normalizes them to {@code https://...}.
+     */
+    private String normalizeExternalHttpUrl(String rawUrl) {
+        if (rawUrl == null) {
+            return null;
+        }
+        String s = rawUrl.trim();
+        if (s.isEmpty()) {
+            return null;
+        }
+        if (s.startsWith("//")) {
+            s = "https:" + s;
+        }
+        if (!s.startsWith("http://") && !s.startsWith("https://")) {
+            s = "https://" + s;
+        }
+        try {
+            URL u = new URL(s);
+            String protocol = u.getProtocol();
+            if (!"http".equalsIgnoreCase(protocol) && !"https".equalsIgnoreCase(protocol)) {
+                return null;
+            }
+            if (u.getHost() == null || u.getHost().isEmpty()) {
+                return null;
+            }
+            return u.toString();
+        } catch (MalformedURLException ignored) {
+            return null;
+        }
+    }
+
     private String schoolDept(UserInfoResponse u) {
         StringBuilder s = new StringBuilder();
         if (u.getDepartment() != null) s.append(u.getDepartment()).append(" ");
@@ -783,6 +1145,43 @@ public class PortfolioHtmlExportService {
             s.append(u.getSemester() != null ? u.getSemester() : "?").append("학기)");
         }
         return s.toString().trim();
+    }
+
+    /** School / major line only (blueStyle sidebar `.school` — grade·semester go in `.meta-line`). */
+    private String schoolDeptSansGrade(UserInfoResponse u) {
+        StringBuilder s = new StringBuilder();
+        if (u.getDepartment() != null) {
+            s.append(u.getDepartment()).append(" ");
+        }
+        if (u.getMajor1() != null) {
+            s.append(u.getMajor1());
+        }
+        if (u.getMajor2() != null && !u.getMajor2().isEmpty()) {
+            s.append(" ").append(u.getMajor2());
+        }
+        return s.toString().trim();
+    }
+
+    private static boolean mileageLooksLikeAward(MileageEntryResponse m) {
+        if (m == null) {
+            return false;
+        }
+        String blob = String.join(" ",
+                nullToEmptyStatic(m.getSubitemName()),
+                nullToEmptyStatic(m.getCategoryName()),
+                nullToEmptyStatic(m.getAdditional_info()),
+                nullToEmptyStatic(m.getDescription1()));
+        return blob.contains("\uC218\uC0C1")
+                || blob.contains("\uC6B0\uC218")
+                || blob.contains("\uAE08\uC0C1")
+                || blob.contains("\uC740\uC0C1")
+                || blob.contains("\uB3D9\uC0C1")
+                || blob.contains("\uACBD\uC9C4")
+                || blob.toLowerCase().contains("award");
+    }
+
+    private static String nullToEmptyStatic(Object o) {
+        return o == null ? "" : String.valueOf(o);
     }
 
     /** Inline base64 when file exists; otherwise context-path-relative image URL (no hostname). */
@@ -863,75 +1262,139 @@ public class PortfolioHtmlExportService {
             + "# STEP 2: INPUT DATA (User fills this in)\n\n"
             + "```\n";
 
-    private static final String PROMPT_TAIL =
-            "\n```\n\n"
+    private String buildCvPromptTail() {
+        return "\n```\n\n"
+                + "---\n\n"
+                + "# STEP 3: GENERATION RULES — MUST FOLLOW ALL\n\n"
+                + "## RULE 1: Strict Priority Order\n"
+                + "Feature content in this order. Skip silently if empty:\n"
+                + "1. GitHub repos + 산학 프로젝트 — Real artifacts, highest credibility\n"
+                + "2. 전공 교과/비교과 — Technical depth\n"
+                + "3. Activities + 대외 활동 — Collaboration, leadership\n"
+                + "4. Bio — Minimal, one short paragraph only\n\n"
+                + "## RULE 2: Zero Fabrication Policy\n"
+                + "- NEVER invent metrics, links, or project details not in the input\n"
+                + "- Empty fields → omit that section entirely, no placeholders\n"
+                + "- Do not infer technologies not explicitly mentioned\n\n"
+                + "## RULE 3: Language Calibration\n"
+                + "| Raw Input | Rewritten As |\n"
+                + "|---|---|\n"
+                + "| \"열심히 했다\" | \"[기술명]을 활용해 [기능] 구현\" |\n"
+                + "| \"팀장을 맡았다\" | \"팀 리드로서 [구체적 결과]\" |\n"
+                + "| \"공부했다\" | \"[기술명] 학습 및 적용\" |\n"
+                + "| \"Senior\", \"Lead\", \"전국 1위\" | 입력에 명시된 경우에만 그대로 사용 |\n\n"
+                + "## RULE 4: Honesty Modifiers\n"
+                + "- Always specify solo vs. team project (팀 N명 중 담당 파트)\n"
+                + "- Do not claim \"full-stack\" unless both frontend + backend evidence exist\n"
+                + "- Only list tech stack items demonstrated in actual projects or coursework\n\n"
+                + "## RULE 5: Achievements = Top Priority Visual\n"
+                + "- Any award or prize must appear prominently (badges or highlighted section)\n"
+                + "- Include prize tier if provided (대상, 최우수, 우수 등)\n\n"
+                + "---\n\n"
+                + "# STEP 4: HTML — **blueStyle** (mandatory)\n\n"
+                + "## 4-A: CSS — COPY THIS BLOCK VERBATIM. Do not change any value, color, or class name.\n\n"
+                + "```html\n"
+                + "<style>\n"
+                + CSS
+                + "\n</style>\n"
+                + "```\n\n"
+                + "## 4-B: Head — use exactly this structure\n"
+                + "```html\n"
+                + "<!DOCTYPE html>\n"
+                + "<html lang=\"ko\">\n"
+                + "<head>\n"
+                + "  <meta charset=\"UTF-8\" />\n"
+                + "  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\n"
+                + "  <title>[name] · Portfolio</title>\n"
+                + "  <link rel=\"preconnect\" href=\"https://fonts.googleapis.com\" />\n"
+                + "  <link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin />\n"
+                + "  <link href=\"https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap\" rel=\"stylesheet\" />\n"
+                + "  [PASTE THE VERBATIM <style> BLOCK FROM 4-A HERE]\n"
+                + "</head>\n"
+                + "```\n\n"
+                + "## 4-C: Body skeleton — use **exactly** these class names\n"
+                + "```html\n"
+                + "<body>\n"
+                + "  <div class=\"page\">\n"
+                + "    <div class=\"card\">\n"
+                + "      <div class=\"card-inner\">\n"
+                + "        <aside class=\"sidebar\">\n"
+                + "          <div class=\"profile\">\n"
+                + "            <div class=\"name\">[이름]</div>\n"
+                + "            <div class=\"role\">[지망 직무/방향]</div>\n"
+                + "            <div class=\"school\">[학과]</div>\n"
+                + "            <div class=\"meta-line\">[학년/학기]</div>\n"
+                + "            <div class=\"summary-chip\"><span>[핵심 한줄]</span></div>\n"
+                + "            <div class=\"section\" style=\"margin-bottom:0;\">\n"
+                + "              <div class=\"section-header\" style=\"margin-bottom:6px;\">\n"
+                + "                <div class=\"section-marker\"></div>\n"
+                + "                <div><div class=\"section-title\" style=\"font-size:13px;\">TECH STACK</div></div>\n"
+                + "              </div>\n"
+                + "              <div class=\"pill-group\">\n"
+                + "                <div class=\"pill\">[tech1]</div>\n"
+                + "              </div>\n"
+                + "            </div>\n"
+                + "            <div class=\"contact-block\">\n"
+                + "              <div class=\"contact-label\">Contact</div>\n"
+                + "              <div class=\"contact-item\"><span class=\"icon\">📧</span><a href=\"mailto:[email]\">[email]</a></div>\n"
+                + "              <div class=\"contact-item\"><span class=\"icon\">🐙</span>\n"
+                + "                <a href=\"[github]\" class=\"link-chip\" target=\"_blank\" rel=\"noreferrer\">\n"
+                + "                  <span>GitHub</span><span>[github display]</span></a></div>\n"
+                + "            </div>\n"
+                + "          </div>\n"
+                + "        </aside>\n"
+                + "        <main class=\"main\">\n"
+                + "          <section class=\"section\">\n"
+                + "            <div class=\"section-header\">\n"
+                + "              <div class=\"section-marker\"></div>\n"
+                + "              <div>\n"
+                + "                <div class=\"section-title\">[SECTION TITLE]</div>\n"
+                + "                <div class=\"section-subtitle\">[subtitle]</div>\n"
+                + "              </div>\n"
+                + "            </div>\n"
+                + "            <div class=\"section-body\">\n"
+                + "              <!-- Prose: .about-text + <p> -->\n"
+                + "              <!-- Lists: .timeline + .timeline-item -->\n"
+                + "              <!-- Achievements: .achievements-box -->\n"
+                + "              <!-- Projects: .project-card -->\n"
+                + "            </div>\n"
+                + "          </section>\n"
+                + "          <footer>[footer text]</footer>\n"
+                + "        </main>\n"
+                + "      </div>\n"
+                + "    </div>\n"
+                + "  </div>\n"
+                + "</body>\n"
+                + "```\n\n"
+                + "---\n\n"
+                + "# STEP 5: QUALITY CHECKLIST (Self-verify silently before outputting HTML)\n"
+                + "- [ ] Clarification questions were asked and answered before generating\n"
+                + "- [ ] Text preview was confirmed by user before generating HTML\n"
+                + "- [ ] `<style>` block is copied verbatim from 4-A\n"
+                + "- [ ] No invented data (metrics, links, names not in input)\n"
+                + "- [ ] All tech stack badges appear in at least one project or course\n"
+                + "- [ ] Max 3 projects, ordered by technical weight\n"
+                + "- [ ] About Me is ≤ 3 sentences\n"
+                + "- [ ] Empty input fields → sections omitted entirely\n"
+                + "- [ ] HTML is a single file, fully self-contained\n"
+                + "- [ ] Korean text renders correctly with Noto Sans KR\n"
+                + "- [ ] Print stylesheet included\n"
+                + "- [ ] blueStyle class names and layout (sidebar + main + timelines + project cards)\n";
+    }
+
+    /** Archive / self-assessment prompt — never mix with {@link #PROMPT_HEAD}. */
+    private static final String ARCHIVE_PROMPT_HEAD =
+            "# ROLE\n"
+            + "You are a calm, honest mentor for CS students in Korea. Your job is to help them see their real progress, name strengths grounded in evidence, surface gaps visible from what is (and is not) in their data, and suggest realistic next steps—not to sell them to recruiters.\n\n"
             + "---\n\n"
-            + "# STEP 3: GENERATION RULES — MUST FOLLOW ALL\n\n"
-            + "## RULE 1: Strict Priority Order\n"
-            + "Feature content in this order. Skip silently if empty:\n"
-            + "1. GitHub repos + 산학 프로젝트 — Real artifacts, highest credibility\n"
-            + "2. 전공 교과/비교과 — Technical depth\n"
-            + "3. Activities + 대외 활동 — Collaboration, leadership\n"
-            + "4. Bio — Minimal, one short paragraph only\n\n"
-            + "## RULE 2: Zero Fabrication Policy\n"
-            + "- NEVER invent metrics, links, or project details not in the input\n"
-            + "- Empty fields → omit that section entirely, no placeholders\n"
-            + "- Do not infer technologies not explicitly mentioned\n\n"
-            + "## RULE 3: Language Calibration\n"
-            + "| Raw Input | Rewritten As |\n"
-            + "|---|---|\n"
-            + "| \"열심히 했다\" | \"[기술명]을 활용해 [기능] 구현\" |\n"
-            + "| \"팀장을 맡았다\" | \"팀 리드로서 [구체적 결과]\" |\n"
-            + "| \"공부했다\" | \"[기술명] 학습 및 적용\" |\n"
-            + "| \"Senior\", \"Lead\", \"전국 1위\" | 입력에 명시된 경우에만 그대로 사용 |\n\n"
-            + "## RULE 4: Honesty Modifiers\n"
-            + "- Always specify solo vs. team project (팀 N명 중 담당 파트)\n"
-            + "- Do not claim \"full-stack\" unless both frontend + backend evidence exist\n"
-            + "- Only list tech stack items demonstrated in actual projects or coursework\n\n"
-            + "## RULE 5: Achievements = Top Priority Visual\n"
-            + "- Any award or prize must appear prominently (badges or highlighted section)\n"
-            + "- Include prize tier if provided (대상, 최우수, 우수 등)\n\n"
+            + "# TASK\n"
+            + "Generate a single-file, self-contained HTML page from STEP 2 only. Tone: neutral and reflective. The reader is the student themselves (and maybe an advisor), not a hiring manager.\n\n"
             + "---\n\n"
-            + "# STEP 4: HTML OUTPUT REQUIREMENTS\n\n"
-            + "Generate a single self-contained .html file with these specifications:\n\n"
-            + "### Layout & Structure\n"
-            + "```\n"
-            + "<header>   — 이름, 지망 직무, 한줄 요약, contact icons\n"
-            + "<section>  — About Me\n"
-            + "<section>  — Tech Stack (tag/badge style)\n"
-            + "<section>  — Projects (card layout, top 3)\n"
-            + "<section>  — Activities & Experience (timeline style)\n"
-            + "<section>  — Achievements (if any)\n"
-            + "<footer>   — GitHub, Email, links\n"
-            + "```\n\n"
-            + "### Design Rules (Classic Resume Style)\n"
-            + "- Color palette: White background, dark navy `#1a1a2e` text, accent `#2563eb` (blue)\n"
-            + "- Font: `Noto Sans KR` from Google Fonts for Korean, `Inter` for English/numbers\n"
-            + "- No animations — static, print-friendly\n"
-            + "- Tech stack: Displayed as inline pill/badge tags\n"
-            + "- Projects: Card with border-left accent line, showing stack badges, role, and outcome\n"
-            + "- Timeline: Left-bordered vertical timeline for activities\n"
-            + "- Achievements: Highlighted box with trophy icon 🏆\n"
-            + "- Responsive: Mobile-friendly (single column on small screens)\n"
-            + "- Print-ready: `@media print` CSS included\n\n"
-            + "### Technical Requirements\n"
-            + "- All CSS must be inline within `<style>` tag — no external CSS files\n"
-            + "- Use Google Fonts CDN only for fonts\n"
-            + "- No JavaScript required (static only)\n"
-            + "- All icons via Unicode emoji or inline SVG — no icon libraries\n"
-            + "- Must render correctly in Chrome, Safari, Firefox\n\n"
+            + "# STEP 1: ONE-SHOT (Archive mode)\n"
+            + "Do **not** ask clarifying questions. Do **not** wait for confirmation. Do **not** simulate a chat. Read STEP 2 and output the HTML in this single response.\n\n"
             + "---\n\n"
-            + "# STEP 5: QUALITY CHECKLIST (Self-verify silently before outputting HTML)\n"
-            + "- [ ] Clarification questions were asked and answered before generating\n"
-            + "- [ ] Text preview was confirmed by user before generating HTML\n"
-            + "- [ ] No invented data (metrics, links, names not in input)\n"
-            + "- [ ] All tech stack badges appear in at least one project or course\n"
-            + "- [ ] Max 3 projects, ordered by technical weight\n"
-            + "- [ ] About Me is ≤ 3 sentences\n"
-            + "- [ ] Empty input fields → sections omitted entirely\n"
-            + "- [ ] HTML is a single file, fully self-contained\n"
-            + "- [ ] Korean text renders correctly with Noto Sans KR\n"
-            + "- [ ] Print stylesheet included\n";
+            + "# STEP 2: INPUT DATA\n\n"
+            + "```\n";
 
     private static final String CSS =
             ":root{--bg:#f9fafb;--card-bg:#ffffff;--text-main:#111827;--text-sub:#4b5563;--accent:#2563eb;--accent-soft:#e5edff;--border:#e5e7eb;}"
@@ -980,9 +1443,127 @@ public class PortfolioHtmlExportService {
             + ".timeline-title{font-size:12px;font-weight:600;color:#0f172a;}"
             + ".timeline-date{font-size:11px;color:#6b7280;margin-top:1px;}"
             + ".timeline-desc{font-size:12px;color:#4b5563;margin-top:2px;}"
+            + ".achievements-box{border-radius:10px;border:1px solid #fed7aa;background:#fffbeb;padding:10px 12px;}"
+            + ".achievements-title{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:#92400e;margin-bottom:4px;}"
+            + ".achievements-list{font-size:12px;color:#7c2d12;padding-left:16px;}"
             + "footer{margin-top:18px;font-size:11px;color:#6b7280;text-align:right;border-top:1px solid rgba(226,232,240,0.9);padding-top:8px;}"
             + "footer a{color:#1d4ed8;text-decoration:none;margin-left:8px;}"
             + "footer a:hover{text-decoration:underline;}"
             + "@media (max-width:768px){.card-inner{flex-direction:column;}.sidebar{width:100%;border-right:none;border-bottom:1px solid rgba(148,163,184,0.25);}.main{padding:20px 18px 22px;}.name{font-size:22px;}.section{margin-bottom:18px;}.project-card{padding:9px 10px 9px 12px;}}"
             + "@media print{body{background-color:#ffffff;}.page{margin:0;padding:0;}.card{box-shadow:none;border-radius:0;border:none;}.sidebar{border-right:1px solid #e5e7eb;}.project-card{box-shadow:none;}a{color:#000000;text-decoration:none;}}";
+
+    /**
+     * Archive prompt tail: embeds {@link #CSS} verbatim so the model copies the same stylesheet as server export.
+     */
+    private String buildArchivePromptTail() {
+        return "\n```\n\n"
+                + "---\n\n"
+                + "# STEP 3: RULES — MUST FOLLOW\n\n"
+                + "## RULE 1: Ordering of evidence (match the narrative to STEP 2 section order)\n"
+                + "1. After intro/context, present **mileage_list** items in the order given (already sorted by semester, then category).\n"
+                + "2. Then **activities** in the order given (chronological by start date).\n"
+                + "3. Then **github_repos** in the order given (newest `updated_at` first when present).\n"
+                + "4. **Tech stack** and **bio** support the story; do not reorder STEP 2 blocks when quoting structure.\n\n"
+                + "## RULE 2: Honest reflection (not resume hype)\n"
+                + "- Describe what the data actually shows: what they did, what they likely learned, where evidence is thin.\n"
+                + "- Do **not** use recruiter-style puffery or the \"language calibration\" rewrite table from sales CVs.\n\n"
+                + "## RULE 3: Gaps and growth (evidence-bound)\n"
+                + "- Call out **gaps** only from what is missing, empty, or weak in STEP 2.\n"
+                + "- Suggest **growth areas** as concrete, student-appropriate next steps — not invented achievements.\n\n"
+                + "## RULE 4: Zero fabrication\n"
+                + "- Never invent metrics, employers, awards, or repos not in STEP 2.\n"
+                + "- If a section has no lines, omit it or note clearly that nothing was selected.\n\n"
+                + "---\n\n"
+                + "# STEP 4: HTML — **blueStyle** (mandatory)\n\n"
+                + "## 4-A: CSS — COPY THIS BLOCK VERBATIM. Do not change any value, color, or class name.\n\n"
+                + "```html\n"
+                + "<style>\n"
+                + CSS
+                + "\n</style>\n"
+                + "```\n\n"
+                + "## 4-B: Head — use exactly this structure\n"
+                + "```html\n"
+                + "<!DOCTYPE html>\n"
+                + "<html lang=\"ko\">\n"
+                + "<head>\n"
+                + "  <meta charset=\"UTF-8\" />\n"
+                + "  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\n"
+                + "  <title>[name] · Reflection Profile</title>\n"
+                + "  <link rel=\"preconnect\" href=\"https://fonts.googleapis.com\" />\n"
+                + "  <link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin />\n"
+                + "  <link href=\"https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap\" rel=\"stylesheet\" />\n"
+                + "  [PASTE THE VERBATIM <style> BLOCK FROM 4-A HERE]\n"
+                + "</head>\n"
+                + "```\n\n"
+                + "## 4-C: Body skeleton — use **exactly** these class names\n"
+                + "```html\n"
+                + "<body>\n"
+                + "  <div class=\"page\">\n"
+                + "    <div class=\"card\">\n"
+                + "      <div class=\"card-inner\">\n"
+                + "        <aside class=\"sidebar\">\n"
+                + "          <div class=\"profile\">\n"
+                + "            <div class=\"name\">[이름]</div>\n"
+                + "            <div class=\"role\">[직무/방향]</div>\n"
+                + "            <div class=\"school\">[학과]</div>\n"
+                + "            <div class=\"meta-line\">[학년/학기]</div>\n"
+                + "            <div class=\"summary-chip\"><span>[핵심 한줄]</span></div>\n"
+                + "            <!-- TECH STACK -->\n"
+                + "            <div class=\"section\" style=\"margin-bottom:0;\">\n"
+                + "              <div class=\"section-header\" style=\"margin-bottom:6px;\">\n"
+                + "                <div class=\"section-marker\"></div>\n"
+                + "                <div><div class=\"section-title\" style=\"font-size:13px;\">TECH STACK</div></div>\n"
+                + "              </div>\n"
+                + "              <div class=\"pill-group\">\n"
+                + "                <div class=\"pill\">[tech1]</div>\n"
+                + "                <!-- repeat per tech -->\n"
+                + "              </div>\n"
+                + "            </div>\n"
+                + "            <!-- CONTACT -->\n"
+                + "            <div class=\"contact-block\">\n"
+                + "              <div class=\"contact-label\">Contact</div>\n"
+                + "              <div class=\"contact-item\"><span class=\"icon\">📧</span><a href=\"mailto:[email]\">[email]</a></div>\n"
+                + "              <div class=\"contact-item\"><span class=\"icon\">🐙</span>\n"
+                + "                <a href=\"[github]\" class=\"link-chip\" target=\"_blank\" rel=\"noreferrer\">\n"
+                + "                  <span>GitHub</span><span>[github display]</span></a></div>\n"
+                + "            </div>\n"
+                + "          </div>\n"
+                + "        </aside>\n"
+                + "        <main class=\"main\">\n"
+                + "          <!-- Each reflective section: -->\n"
+                + "          <section class=\"section\">\n"
+                + "            <div class=\"section-header\">\n"
+                + "              <div class=\"section-marker\"></div>\n"
+                + "              <div>\n"
+                + "                <div class=\"section-title\">[SECTION TITLE]</div>\n"
+                + "                <div class=\"section-subtitle\">[subtitle]</div>\n"
+                + "              </div>\n"
+                + "            </div>\n"
+                + "            <div class=\"section-body\">\n"
+                + "              <!-- use .about-text+<p> for prose -->\n"
+                + "              <!-- use .timeline + .timeline-item for lists -->\n"
+                + "              <!-- use .achievements-box for gaps/warnings -->\n"
+                + "              <!-- use .project-card for project entries -->\n"
+                + "            </div>\n"
+                + "          </section>\n"
+                + "          <footer>[footer text]</footer>\n"
+                + "        </main>\n"
+                + "      </div>\n"
+                + "    </div>\n"
+                + "  </div>\n"
+                + "</body>\n"
+                + "```\n\n"
+                + "## 4-D: Section title renaming allowed\n"
+                + "You may rename section **titles** for reflective tone (e.g. \"STRENGTHS\", \"GAPS & NEXT STEPS\", \"TECH EVIDENCE\") "
+                + "but **never change class names**.\n\n"
+                + "---\n\n"
+                + "# STEP 5: CHECKLIST (silent, before you output HTML)\n"
+                + "- [ ] One-shot: no questions to the user\n"
+                + "- [ ] `<style>` block is **copied verbatim** from 4-A — not rewritten\n"
+                + "- [ ] Sidebar uses: `.name`, `.role`, `.school`, `.meta-line`, `.summary-chip`, `.pill-group`+`.pill`, `.contact-block`+`.contact-item`+`a.link-chip`\n"
+                + "- [ ] Main uses: `.section`, `.section-header`, `.section-marker`, `.section-title`, `.section-subtitle`, `.section-body`\n"
+                + "- [ ] Prose → `.about-text` + `<p>` | Lists → `.timeline` + `.timeline-item` | Highlights → `.achievements-box` | Projects → `.project-card`\n"
+                + "- [ ] No fabricated facts; gaps/growth tied to missing data only\n"
+                + "- [ ] Single self-contained HTML file\n";
+    }
 }
