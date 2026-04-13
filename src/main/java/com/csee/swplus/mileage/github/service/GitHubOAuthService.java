@@ -2,8 +2,12 @@ package com.csee.swplus.mileage.github.service;
 
 import com.csee.swplus.mileage.github.dto.GitHubStatusResponse;
 import com.csee.swplus.mileage.github.util.TokenEncryptionUtil;
+import com.csee.swplus.mileage.portfolio.repository.PortfolioGithubRepoCacheRepository;
+import com.csee.swplus.mileage.portfolio.repository.PortfolioRepoEntryRepository;
+import com.csee.swplus.mileage.portfolio.repository.PortfolioRepository;
 import com.csee.swplus.mileage.profile.entity.Profile;
 import com.csee.swplus.mileage.profile.repository.ProfileRepository;
+import com.csee.swplus.mileage.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -37,6 +41,10 @@ public class GitHubOAuthService {
     private String tokenEncryptionKey;
 
     private final ProfileRepository profileRepository;
+    private final UserRepository userRepository;
+    private final PortfolioRepository portfolioRepository;
+    private final PortfolioGithubRepoCacheRepository portfolioGithubRepoCacheRepository;
+    private final PortfolioRepoEntryRepository portfolioRepoEntryRepository;
     private final RestTemplate restTemplate;
 
     @Transactional
@@ -154,8 +162,9 @@ public class GitHubOAuthService {
     }
 
     /**
-     * Disconnect GitHub account for the current user.
-     * Clears github_id, github_username, github_connected_at (and optionally github_link from OAuth).
+     * Disconnect GitHub for the current user: clears all OAuth fields (including any orphaned encrypted
+     * token), removes OAuth-style {@code github_link}, and deletes this portfolio’s GitHub repo cache and
+     * selected repo entries so no GitHub-derived data remains without an active connection.
      */
     @Transactional
     public void disconnect() {
@@ -167,8 +176,14 @@ public class GitHubOAuthService {
             log.debug("   No profile found for user, nothing to disconnect");
             return;
         }
-        if (profile.getGithubId() == null) {
-            log.debug("   User has no GitHub connected, nothing to do");
+
+        boolean hadGithubState =
+                profile.getGithubId() != null
+                        || profile.getGithubConnectedAt() != null
+                        || (profile.getGithubUsername() != null && !profile.getGithubUsername().isEmpty())
+                        || (profile.getGithubAccessToken() != null && !profile.getGithubAccessToken().isEmpty());
+        if (!hadGithubState) {
+            log.debug("   No GitHub OAuth state on profile, nothing to do");
             return;
         }
 
@@ -176,11 +191,24 @@ public class GitHubOAuthService {
         profile.setGithubUsername(null);
         profile.setGithubConnectedAt(null);
         profile.setGithubAccessToken(null);
-        // Clear github_link only if it was set by OAuth (optional: you can leave it if user entered manually)
         if (profile.getGithubLink() != null && profile.getGithubLink().startsWith("https://github.com/")) {
             profile.setGithubLink(null);
         }
         profileRepository.save(profile);
-        log.info("   ✅ GitHub disconnected for user: {}", currentUserId);
+
+        userRepository
+                .findByUniqueId(currentUserId)
+                .flatMap(u -> portfolioRepository.findByUser_Id(u.getId()))
+                .ifPresent(
+                        p -> {
+                            long pid = p.getId();
+                            portfolioRepoEntryRepository.deleteByPortfolio_Id(pid);
+                            portfolioGithubRepoCacheRepository.deleteByPortfolio_Id(pid);
+                            log.info(
+                                    "   Removed GitHub portfolio cache and repo selections for portfolio id {}",
+                                    pid);
+                        });
+
+        log.info("   ✅ GitHub disconnected and token cleared for user: {}", currentUserId);
     }
 }
