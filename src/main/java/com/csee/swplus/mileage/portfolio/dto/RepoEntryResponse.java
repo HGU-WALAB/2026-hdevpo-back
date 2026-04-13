@@ -29,8 +29,8 @@ public class RepoEntryResponse {
     private Boolean is_visible;
     private Integer display_order;
 
-    // Live GitHub repo data (public API)
-    private String name;
+    /** GitHub repository {@code name} field (repo slug), same source as {@link #github_description}. */
+    private String github_title;
     private String html_url;
     /** Primary language (from repo list API). Kept for backward compatibility. */
     private String language;
