@@ -37,12 +37,15 @@ public class PortfolioRepositoriesController {
     @GetMapping
     @Operation(
             summary = "GitHub 레포 목록 (캐시)",
-            description = "DB 캐시 기반. visible_only=true이면 page/per_page 무시·표시 레포 전부 반환, 아니면 페이지네이션. POST …/github-cache/refresh 로 선행 채우기. "
-                    + "owner: owner_login(조직/유저) 정확 일치 필터. "
-                    + "search: 레포 이름·owner·URL·설명·언어·repo_id·커스텀 제목/설명 부분 일치(공백으로 AND). "
-                    + "affiliation 쿼리는 지원하지 않음(캐시 행에 저장되지 않음). "
-                    + "캐시 갱신 시 GitHub에는 affiliation=owner,collaborator 만 사용(organization_member 제외). "
-                    + "참고: GitHub affiliation 파라미터는 목록 API에서의 관계 필터이며 ‘커밋한 모든 레포’와 같지 않음.")
+            description =
+                    "DB 캐시 기반 레포 목록 API입니다 (요청 시 GitHub API를 직접 호출하지 않습니다). "
+                            + "데이터 조회 전 POST /github-cache/refresh 를 통해 캐시를 먼저 생성해야 합니다. "
+
+                            + "visible_only=true인 경우 page/per_page는 무시되고 전체 레포가 반환됩니다. "
+
+                            + "owner: owner_login 기준으로 조직/유저를 정확히 일치시켜 필터링합니다. "
+                            + "search: 이름, owner, URL, 설명, 언어, repo_id, 커스텀 제목/설명에 대해 부분 일치 검색이며 공백은 AND 조건입니다. "
+    )
     public ResponseEntity<RepositoriesResponse> getRepositories(
             @RequestParam(value = "page", required = false) Integer page,
             @RequestParam(value = "per_page", required = false) Integer perPage,
