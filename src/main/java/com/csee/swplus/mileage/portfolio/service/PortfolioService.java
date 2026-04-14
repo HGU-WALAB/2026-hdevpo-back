@@ -562,8 +562,7 @@ public class PortfolioService {
 
     /**
      * Fetches one page from GitHub’s list APIs. With a token: {@code GET /user/repos} including
-     * {@code affiliation} (see caller; refresh uses {@code owner,collaborator} only—no
-     * {@code organization_member}, so org-wide repos you only see via membership are omitted).
+     * {@code affiliation} (see caller; refresh includes {@code organization_member}).
      * Without a token: {@code GET /users/{username}/repos?type=owner} (public owner repos only).
      */
     private Map[] fetchGithubReposPage(
@@ -607,8 +606,8 @@ public class PortfolioService {
      * name, url, primary language, dates, visibility, owner, stars, forks. Does not clear existing
      * {@code languages_json} on rows already enriched via PUT/PATCH.
      * <p>
-     * When calling GitHub with an OAuth token, {@code affiliation=owner,collaborator} lists repos you own or
-     * are an explicit collaborator on (not every repo visible via org membership).
+     * When calling GitHub with an OAuth token, {@code affiliation=owner,collaborator,organization_member} lists
+     * repos you own, are a collaborator on, or can see via org membership (may be larger).
      * <p>
      * Full language breakdown is written on {@code PUT/PATCH /portfolio/repositories} for selected repos.
      */
@@ -652,7 +651,7 @@ public class PortfolioService {
         }
         String sortParam = "updated";
         String visibilityParam = "all";
-        String affiliationParam = "owner,collaborator";
+        String affiliationParam = "owner,collaborator,organization_member";
         int perPage = 100;
         LocalDateTime now = LocalDateTime.now();
         int synced = 0;
