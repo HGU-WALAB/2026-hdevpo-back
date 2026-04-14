@@ -11,8 +11,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class GitHubOrgDto {
     private Long id;
-    private String login;
+    private String owner;
     private String avatarUrl;
-    private String htmlUrl;
 }
 

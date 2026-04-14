@@ -1,7 +1,6 @@
 package com.csee.swplus.mileage.github.service;
 
 import com.csee.swplus.mileage.github.dto.GitHubOrgDto;
-import com.csee.swplus.mileage.github.dto.GitHubOrgsResponse;
 import com.csee.swplus.mileage.github.dto.GitHubStatusResponse;
 import com.csee.swplus.mileage.github.util.TokenEncryptionUtil;
 import com.csee.swplus.mileage.portfolio.repository.PortfolioGithubRepoCacheRepository;
@@ -172,34 +171,29 @@ public class GitHubOAuthService {
 
     /**
      * Lists GitHub organizations for the current user via {@code GET /user/orgs}.
-     * Requires stored OAuth token (encrypted in profile). Returns 200 with warnings if token is unavailable.
+     * Requires stored OAuth token (encrypted in profile). If token is unavailable, returns an empty list.
      */
     @SuppressWarnings({"rawtypes"})
-    public GitHubOrgsResponse listOrganizations() {
+    public List<GitHubOrgDto> listOrganizations() {
         String currentUserId = SecurityContextHolder.getContext().getAuthentication().getName();
-        List<String> warnings = new ArrayList<>();
 
         Profile profile = profileRepository.findBySnum(currentUserId).orElse(null);
         if (profile == null) {
-            warnings.add("NO_PROFILE: Profile not found.");
-            return GitHubOrgsResponse.builder().organizations(Collections.emptyList()).warnings(warnings).build();
+            return Collections.emptyList();
         }
 
         if (tokenEncryptionKey == null || tokenEncryptionKey.isEmpty()) {
-            warnings.add("GITHUB_TOKEN_KEY_MISSING: github.token-encryption-key is not configured.");
-            return GitHubOrgsResponse.builder().organizations(Collections.emptyList()).warnings(warnings).build();
+            return Collections.emptyList();
         }
 
         String encrypted = profile.getGithubAccessToken();
         if (encrypted == null || encrypted.isEmpty()) {
-            warnings.add("NO_GITHUB_TOKEN: No linked GitHub OAuth token.");
-            return GitHubOrgsResponse.builder().organizations(Collections.emptyList()).warnings(warnings).build();
+            return Collections.emptyList();
         }
 
         String token = TokenEncryptionUtil.decrypt(encrypted, tokenEncryptionKey);
         if (token == null || token.isEmpty()) {
-            warnings.add("GITHUB_TOKEN_UNAVAILABLE: Token could not be decrypted or is empty.");
-            return GitHubOrgsResponse.builder().organizations(Collections.emptyList()).warnings(warnings).build();
+            return Collections.emptyList();
         }
 
         List<GitHubOrgDto> orgs = new ArrayList<>();
@@ -228,14 +222,12 @@ public class GitHubOAuthService {
                     Map m = (Map) o;
                     Object idObj = m.get("id");
                     Long id = (idObj instanceof Number) ? ((Number) idObj).longValue() : null;
-                    String login = (String) m.get("login");
+                    String owner = (String) m.get("login");
                     String avatarUrl = (String) m.get("avatar_url");
-                    String htmlUrl = (String) m.get("html_url");
                     orgs.add(GitHubOrgDto.builder()
                             .id(id)
-                            .login(login)
+                            .owner(owner)
                             .avatarUrl(avatarUrl)
-                            .htmlUrl(htmlUrl)
                             .build());
                 }
                 if (items.size() < 100) {
@@ -243,11 +235,10 @@ public class GitHubOAuthService {
                 }
             }
         } catch (Exception e) {
-            String msg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-            warnings.add("GITHUB_ORGS_FAILED: Could not fetch organizations: " + msg);
+            return Collections.emptyList();
         }
 
-        return GitHubOrgsResponse.builder().organizations(orgs).warnings(warnings).build();
+        return orgs;
     }
 
     /**
