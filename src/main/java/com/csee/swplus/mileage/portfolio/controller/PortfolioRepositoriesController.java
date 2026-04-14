@@ -61,8 +61,8 @@ public class PortfolioRepositoriesController {
      */
     @PostMapping("/github-cache/refresh")
     @Operation(summary = "GitHub 레포 메타 캐시 갱신",
-            description = "GitHub list API + (토큰 시) commit search로 기여 레포 병합. 상세·languages는 PUT/PATCH에서 보강. "
-                    + "warnings: NO_GITHUB_TOKEN, CONTRIBUTOR_SEARCH_TRUNCATED, CONTRIBUTOR_SEARCH_FAILED 등.")
+            description = "GitHub list API로 캐시 행 갱신. 상세·languages는 PUT/PATCH에서 보강. "
+                    + "warnings: NO_GITHUB_TOKEN 등(토큰/공개 API 한계).")
     public ResponseEntity<GithubRepoCacheSyncResult> refreshGithubRepoCache() {
         Users user = getCurrentUser();
         return ResponseEntity.ok(portfolioService.refreshGithubRepositoriesCache(user));

@@ -587,9 +587,7 @@ public class PortfolioService {
      * {@code languages_json} on rows already enriched via PUT/PATCH.
      * <p>
      * When calling GitHub with an OAuth token, {@code affiliation=owner,collaborator} lists repos you own or
-     * are an explicit collaborator on (not every repo visible via org membership). Additionally,
-     * {@code GET /search/commits?q=author:{login}} (paginated, max 1000 commits) adds repositories where you
-     * authored commits—including org repos you contributed to without being a collaborator.
+     * are an explicit collaborator on (not every repo visible via org membership).
      * <p>
      * Full language breakdown is written on {@code PUT/PATCH /portfolio/repositories} for selected repos.
      */
@@ -637,7 +635,6 @@ public class PortfolioService {
         int perPage = 100;
         LocalDateTime now = LocalDateTime.now();
         int synced = 0;
-        Set<Long> seenRepoIds = new HashSet<>();
         for (int p = 1; p <= 50; p++) {
             Map[] repos = fetchGithubReposPage(
                     githubUsername, githubToken, p, perPage, sortParam, visibilityParam, affiliationParam);
@@ -652,15 +649,9 @@ public class PortfolioService {
                 if (!(idObj instanceof Number)) {
                     continue;
                 }
-                long repoId = ((Number) idObj).longValue();
-                seenRepoIds.add(repoId);
                 upsertOneCachedRepoFromGithubMap(portfolio, repo, now);
                 synced++;
             }
-        }
-        if (githubToken != null && !githubToken.isEmpty()) {
-            synced += mergeContributorReposFromCommitSearch(
-                    portfolio, githubUsername, githubToken, seenRepoIds, now, warnings);
         }
         return GithubRepoCacheSyncResult.builder().reposSynced(synced).warnings(warnings).build();
     }
@@ -721,117 +712,6 @@ public class PortfolioService {
             row.setLanguages(new ArrayList<>());
         }
         portfolioGithubRepoCacheRepository.save(row);
-    }
-
-    /**
-     * Adds repos found via {@code GET /search/commits?q=author:{login}} (unique by repository id) that were not
-     * returned by {@code GET /user/repos} with affiliation owner/collaborator. Requires OAuth token.
-     * GitHub caps commit search at 1000 results.
-     */
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    private int mergeContributorReposFromCommitSearch(
-            Portfolio portfolio,
-            String githubUsername,
-            String githubToken,
-            Set<Long> seenRepoIds,
-            LocalDateTime now,
-            List<String> warnings) {
-        int added = 0;
-        try {
-            HttpHeaders headers = new HttpHeaders();
-            headers.setBearerAuth(githubToken);
-            headers.setAccept(Collections.singletonList(MediaType.parseMediaType("application/vnd.github+json")));
-            HttpEntity<Void> req = new HttpEntity<>(headers);
-            Integer totalCount = null;
-            for (int page = 1; page <= 10; page++) {
-                String url = UriComponentsBuilder.fromHttpUrl(githubApiBaseUrl + "/search/commits")
-                        .queryParam("q", "author:" + githubUsername)
-                        .queryParam("per_page", 100)
-                        .queryParam("page", page)
-                        .toUriString();
-                ResponseEntity<Map> res = restTemplate.exchange(url, HttpMethod.GET, req, Map.class);
-                Map body = res.getBody();
-                if (body == null) {
-                    break;
-                }
-                if (totalCount == null && body.get("total_count") instanceof Number) {
-                    totalCount = ((Number) body.get("total_count")).intValue();
-                    if (totalCount > 1000) {
-                        warnings.add(
-                                "CONTRIBUTOR_SEARCH_TRUNCATED: GitHub commit search returns at most 1000 commits; "
-                                        + "some contributor repositories may be missing.");
-                    }
-                }
-                Object itemsObj = body.get("items");
-                if (!(itemsObj instanceof List)) {
-                    break;
-                }
-                List<?> items = (List<?>) itemsObj;
-                if (items.isEmpty()) {
-                    break;
-                }
-                for (Object itemObj : items) {
-                    if (!(itemObj instanceof Map)) {
-                        continue;
-                    }
-                    Map<?, ?> item = (Map<?, ?>) itemObj;
-                    Object repoObj = item.get("repository");
-                    if (!(repoObj instanceof Map)) {
-                        continue;
-                    }
-                    Map<?, ?> repo = (Map<?, ?>) repoObj;
-                    Object idObj = repo.get("id");
-                    if (!(idObj instanceof Number)) {
-                        continue;
-                    }
-                    long repoId = ((Number) idObj).longValue();
-                    if (seenRepoIds.contains(repoId)) {
-                        continue;
-                    }
-                    // Commit search repository objects can omit fields like created_at/updated_at/language.
-                    // Hydrate via GET /repositories/{id} when needed so the cache has dates/language.
-                    Map<?, ?> repoForUpsert = repo;
-                    if (repo.get("created_at") == null || repo.get("updated_at") == null || repo.get("language") == null) {
-                        Map<String, Object> detailed = fetchGithubRepoByIdWithToken(repoId, githubToken);
-                        if (detailed != null && !detailed.isEmpty()) {
-                            repoForUpsert = detailed;
-                        }
-                    }
-                    upsertOneCachedRepoFromGithubMap(portfolio, repoForUpsert, now);
-                    seenRepoIds.add(repoId);
-                    added++;
-                }
-                if (items.size() < 100) {
-                    break;
-                }
-                if (totalCount != null && page * 100 >= totalCount) {
-                    break;
-                }
-            }
-        } catch (Exception e) {
-            String msg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-            warnings.add("CONTRIBUTOR_SEARCH_FAILED: Could not merge contributor repos via commit search: " + msg);
-        }
-        return added;
-    }
-
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> fetchGithubRepoByIdWithToken(long repoId, String githubToken) {
-        try {
-            HttpHeaders headers = new HttpHeaders();
-            headers.setBearerAuth(githubToken);
-            headers.setAccept(Collections.singletonList(MediaType.APPLICATION_JSON));
-            HttpEntity<Void> req = new HttpEntity<>(headers);
-            ResponseEntity<Map> res = restTemplate.exchange(
-                    githubApiBaseUrl + "/repositories/" + repoId, HttpMethod.GET, req, Map.class);
-            Object body = res.getBody();
-            if (body instanceof Map) {
-                return (Map<String, Object>) body;
-            }
-        } catch (Exception ignored) {
-            // best-effort hydration only
-        }
-        return null;
     }
 
     /**
