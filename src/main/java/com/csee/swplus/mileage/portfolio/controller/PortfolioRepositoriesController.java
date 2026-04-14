@@ -2,6 +2,7 @@ package com.csee.swplus.mileage.portfolio.controller;
 
 import com.csee.swplus.mileage.auth.service.AuthService;
 import com.csee.swplus.mileage.portfolio.dto.GithubRepoCacheSyncResult;
+import com.csee.swplus.mileage.portfolio.dto.PutRepositoriesResultResponse;
 import com.csee.swplus.mileage.portfolio.dto.RepoEntryRequest;
 import com.csee.swplus.mileage.portfolio.dto.RepoEntryResponse;
 import com.csee.swplus.mileage.portfolio.dto.RepoPatchRequest;
@@ -75,7 +76,7 @@ public class PortfolioRepositoriesController {
      */
     @PutMapping
     @Operation(summary = "레포 표시 설정 일괄 동기화")
-    public ResponseEntity<RepositoriesResponse> putRepositories(@Valid @RequestBody List<RepoEntryRequest> request) {
+    public ResponseEntity<PutRepositoriesResultResponse> putRepositories(@Valid @RequestBody List<RepoEntryRequest> request) {
         Users user = getCurrentUser();
         return ResponseEntity.ok(portfolioService.putRepositories(user, request));
     }
