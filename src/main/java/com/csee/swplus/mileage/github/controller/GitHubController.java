@@ -1,6 +1,7 @@
 package com.csee.swplus.mileage.github.controller;
 
 import com.csee.swplus.mileage.auth.util.JwtUtil;
+import com.csee.swplus.mileage.github.dto.GitHubOrgDto;
 import com.csee.swplus.mileage.github.dto.GitHubStatusResponse;
 import com.csee.swplus.mileage.github.service.GitHubOAuthService;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +20,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.security.Key;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/mileage/github")
@@ -156,6 +158,14 @@ public class GitHubController {
         log.debug("   Status - Connected: {}, Username: {}", 
                 response.isConnected(), response.getGithubUsername());
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Lists organizations the user belongs to (requires stored OAuth token).
+     */
+    @GetMapping("/orgs")
+    public ResponseEntity<List<GitHubOrgDto>> orgs() {
+        return ResponseEntity.ok(oauthService.listOrganizations());
     }
     
     private String extractAccessTokenFromCookies(HttpServletRequest request) {

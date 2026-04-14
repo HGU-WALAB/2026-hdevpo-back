@@ -4,6 +4,7 @@ import com.csee.swplus.mileage.auth.service.AuthService;
 import com.csee.swplus.mileage.portfolio.dto.*;
 import com.csee.swplus.mileage.portfolio.service.PortfolioCvService;
 import com.csee.swplus.mileage.user.entity.Users;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -27,6 +28,11 @@ public class PortfolioCvController {
      * POST /api/portfolio/cv/build-prompt – Build prompt and create CV (html blank).
      * Returns prompt, cv_id, public_token. User copies prompt to LLM, pastes HTML, then PATCH /cv/{id} with html_content / is_public.
      */
+    @Operation(
+            summary = "프롬프트 생성 및 CV 레코드 생성",
+            description = "**mode** — `cv` (기본, 생략·null) 또는 `archive` (성찰·아카이브용 프롬프트). 그 외 문자열은 **400**. "
+                    + "`archive`일 때 요청 필드 `job_posting`은 프롬프트 본문에서만 관심 영역으로 표시(필드명은 그대로). "
+                    + "서버는 LLM을 호출하지 않습니다 — 사용자가 개인 AI에 붙여넣습니다.")
     @PostMapping("/build-prompt")
     public ResponseEntity<CvBuildPromptResponse> buildPrompt(@RequestBody CvBuildPromptRequest request) {
         Users user = getCurrentUser();

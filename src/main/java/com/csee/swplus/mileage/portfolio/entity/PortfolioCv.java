@@ -40,6 +40,11 @@ public class PortfolioCv extends BaseTime {
     @Column(name = "additional_notes", columnDefinition = "TEXT")
     private String additionalNotes;
 
+    /** Stored as {@code cv} or {@code archive} (see {@code CvPromptMode}). */
+    @Column(name = "mode", nullable = false, length = 16)
+    @Builder.Default
+    private String mode = "cv";
+
     @Column(name = "prompt", columnDefinition = "TEXT")
     private String prompt;
 

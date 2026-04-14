@@ -43,7 +43,10 @@ public class PortfolioCvService {
      * in the next step.
      */
     public CvBuildPromptResponse buildPrompt(Users user, CvBuildPromptRequest request) {
-        String prompt = htmlExportService.buildCvPrompt(user, request);
+        CvPromptMode mode = CvPromptMode.fromRequest(request.getMode());
+        String prompt = mode == CvPromptMode.CV
+                ? htmlExportService.buildCvPrompt(user, request)
+                : htmlExportService.buildArchivePrompt(user, request);
         String title = resolveDefaultCvTitle(request);
         PortfolioCv cv = null;
         for (int attempt = 0; attempt < 32; attempt++) {
@@ -54,6 +57,7 @@ public class PortfolioCvService {
                         .jobPosting(request.getJob_posting())
                         .targetPosition(request.getTarget_position())
                         .additionalNotes(request.getAdditional_notes())
+                        .mode(mode.getValue())
                         .prompt(prompt)
                         .htmlContent("")
                         .publicToken(generateNumericPublicToken())
@@ -224,6 +228,7 @@ public class PortfolioCvService {
                 .job_posting(cv.getJobPosting())
                 .target_position(cv.getTargetPosition())
                 .additional_notes(cv.getAdditionalNotes())
+                .mode(cv.getMode() != null ? cv.getMode() : CvPromptMode.CV.getValue())
                 .prompt(cv.getPrompt())
                 .html_content(cv.getHtmlContent())
                 .public_token(cv.getPublicToken())
@@ -240,6 +245,7 @@ public class PortfolioCvService {
                 .job_posting(ellipsis(cv.getJobPosting(), CV_LIST_JOB_POSTING_MAX))
                 .target_position(cv.getTargetPosition())
                 .additional_notes(ellipsis(cv.getAdditionalNotes(), CV_LIST_NOTES_MAX))
+                .mode(cv.getMode() != null ? cv.getMode() : CvPromptMode.CV.getValue())
                 .public_token(cv.getPublicToken())
                 .is_public(cv.isPublic())
                 .created_at(cv.getRegdate())

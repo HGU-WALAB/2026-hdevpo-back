@@ -24,6 +24,8 @@ public class CvListItem {
     private String target_position;
     /** 추가 요청사항 */
     private String additional_notes;
+    /** {@code cv} or {@code archive} */
+    private String mode;
     private String public_token;
     private boolean is_public;
     private LocalDateTime created_at;

@@ -1,5 +1,6 @@
 package com.csee.swplus.mileage.github.service;
 
+import com.csee.swplus.mileage.github.dto.GitHubOrgDto;
 import com.csee.swplus.mileage.github.dto.GitHubStatusResponse;
 import com.csee.swplus.mileage.github.util.TokenEncryptionUtil;
 import com.csee.swplus.mileage.portfolio.repository.PortfolioGithubRepoCacheRepository;
@@ -18,6 +19,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 
 @Service
@@ -86,10 +90,14 @@ public class GitHubOAuthService {
                     Map.class
             );
 
-            Map<String, Object> githubUser = userRes.getBody();
-            Long githubId = Long.valueOf(githubUser.get("id").toString());
-            String githubUsername = (String) githubUser.get("login");
-            String githubName = (String) githubUser.get("name");
+            Map githubUser = userRes.getBody();
+            Long githubId = githubUser.get("id") != null ? Long.valueOf(githubUser.get("id").toString()) : null;
+            String githubUsername = githubUser.get("login") != null ? githubUser.get("login").toString() : null;
+            String githubName = githubUser.get("name") != null ? githubUser.get("name").toString() : null;
+            if (githubId == null || githubUsername == null || githubUsername.isEmpty()) {
+                log.error("❌ GitHub user response missing id/login");
+                throw new RuntimeException("Failed to fetch GitHub user identity");
+            }
             
             log.info("   ✅ GitHub user info fetched - ID: {}, Username: {}, Name: {}", 
                     githubId, githubUsername, githubName);
@@ -159,6 +167,78 @@ public class GitHubOAuthService {
                     .githubUsername(null)
                     .build();
         }
+    }
+
+    /**
+     * Lists GitHub organizations for the current user via {@code GET /user/orgs}.
+     * Requires stored OAuth token (encrypted in profile). If token is unavailable, returns an empty list.
+     */
+    @SuppressWarnings({"rawtypes"})
+    public List<GitHubOrgDto> listOrganizations() {
+        String currentUserId = SecurityContextHolder.getContext().getAuthentication().getName();
+
+        Profile profile = profileRepository.findBySnum(currentUserId).orElse(null);
+        if (profile == null) {
+            return Collections.emptyList();
+        }
+
+        if (tokenEncryptionKey == null || tokenEncryptionKey.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        String encrypted = profile.getGithubAccessToken();
+        if (encrypted == null || encrypted.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        String token = TokenEncryptionUtil.decrypt(encrypted, tokenEncryptionKey);
+        if (token == null || token.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<GitHubOrgDto> orgs = new ArrayList<>();
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.setBearerAuth(token);
+            headers.setAccept(Collections.singletonList(MediaType.APPLICATION_JSON));
+            HttpEntity<Void> req = new HttpEntity<>(headers);
+
+            // paginate (per_page max 100)
+            for (int page = 1; page <= 10; page++) {
+                String url = apiBaseUrl + "/user/orgs?per_page=100&page=" + page;
+                ResponseEntity<List> res = restTemplate.exchange(url, HttpMethod.GET, req, List.class);
+                Object body = res.getBody();
+                if (!(body instanceof List)) {
+                    break;
+                }
+                List<?> items = (List<?>) body;
+                if (items.isEmpty()) {
+                    break;
+                }
+                for (Object o : items) {
+                    if (!(o instanceof Map)) {
+                        continue;
+                    }
+                    Map m = (Map) o;
+                    Object idObj = m.get("id");
+                    Long id = (idObj instanceof Number) ? ((Number) idObj).longValue() : null;
+                    String owner = (String) m.get("login");
+                    String avatarUrl = (String) m.get("avatar_url");
+                    orgs.add(GitHubOrgDto.builder()
+                            .id(id)
+                            .owner(owner)
+                            .avatarUrl(avatarUrl)
+                            .build());
+                }
+                if (items.size() < 100) {
+                    break;
+                }
+            }
+        } catch (Exception e) {
+            return Collections.emptyList();
+        }
+
+        return orgs;
     }
 
     /**

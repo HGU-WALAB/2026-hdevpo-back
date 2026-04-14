@@ -317,7 +317,7 @@ public class PortfolioService {
      * Overload for internal callers (PUT, etc.): no filters.
      */
     public RepositoriesResponse getRepositories(Users user) {
-        return getRepositories(user, 1, 100, null, null, null, null, null);
+        return getRepositories(user, 1, 100, null, null, null, null, null, null);
     }
 
     /**
@@ -326,21 +326,31 @@ public class PortfolioService {
      */
     public RepositoriesResponse getRepositories(Users user, Integer page, Integer perPage,
             Boolean selectedOnly, Boolean visibleOnly) {
-        return getRepositories(user, page, perPage, selectedOnly, visibleOnly, null, null, null);
+        return getRepositories(user, page, perPage, selectedOnly, visibleOnly, null, null, null, null);
     }
 
     /**
      * Full getRepositories with sort and visibility. When GitHub is linked, the list is read only from
-     * {@code _sw_mileage_portfolio_github_repo_cache} (paginated in memory). Run POST …/github-cache/refresh
-     * to populate. Optional {@code search} filters cached rows (repo name, owner, URL, description, language,
-     * repo id, custom title / description on linked portfolio entries) before sort and pagination.
+     * {@code _sw_mileage_portfolio_github_repo_cache} (paginated in memory unless {@code visible_only=true},
+     * in which case {@code page} / {@code per_page} are ignored and all visible portfolio repos are returned).
+     * Run POST …/github-cache/refresh to populate. Optional {@code search} filters cached rows
+     * (repo name, owner, URL, description, language, repo id, custom title / description on linked portfolio
+     * entries) before sort and pagination (or before returning the full visible-only list).
      * This endpoint does not accept GitHub’s {@code affiliation} query (it is not stored per cache
      * row). Separately, note that GitHub’s {@code affiliation} on {@code GET /user/repos} classifies each repo
      * by relationship (owner / collaborator / organization member) for that <em>listing</em> API—it does not mean
      * “every repository I have committed to.” PATCH a repo to pull fresh GitHub detail into the cache for that row.
      */
-    public RepositoriesResponse getRepositories(Users user, Integer page, Integer perPage,
-            Boolean selectedOnly, Boolean visibleOnly, String sort, String visibility, String search) {
+    public RepositoriesResponse getRepositories(
+            Users user,
+            Integer page,
+            Integer perPage,
+            Boolean selectedOnly,
+            Boolean visibleOnly,
+            String sort,
+            String visibility,
+            String owner,
+            String search) {
         int p = (page == null || page < 1) ? 1 : page;
         int limit = (perPage == null || perPage < 1) ? 30 : perPage;
         if (limit > 100) {
@@ -363,7 +373,7 @@ public class PortfolioService {
             githubUsername = profile.getGithubUsername();
         }
 
-        String sortParam = (sort != null && sort.matches("created|updated|pushed|full_name")) ? sort : "updated";
+        String sortParam = (sort != null && sort.matches("created|updated|pushed|full_name|owner_login")) ? sort : "updated";
         String visibilityParam = (visibility != null && visibility.matches("all|public|private")) ? visibility : "all";
 
         java.util.List<RepoEntryResponse> list = new java.util.ArrayList<>();
@@ -372,6 +382,11 @@ public class PortfolioService {
             List<PortfolioGithubRepoCache> cached =
                     portfolioGithubRepoCacheRepository.findByPortfolio_Id(portfolio.getId());
             List<PortfolioGithubRepoCache> filtered = new ArrayList<>(cached);
+            if (owner != null && !owner.trim().isEmpty()) {
+                String ownerLogin = owner.trim();
+                filtered.removeIf(
+                        c -> c.getOwnerLogin() == null || !c.getOwnerLogin().equalsIgnoreCase(ownerLogin));
+            }
             if ("public".equals(visibilityParam)) {
                 filtered.removeIf(c -> !"public".equals(c.getVisibility()));
             } else if ("private".equals(visibilityParam)) {
@@ -387,6 +402,14 @@ public class PortfolioService {
                 cmp = Comparator.comparing(
                         PortfolioGithubRepoCache::getGithubCreatedAt,
                         Comparator.nullsLast(Comparator.reverseOrder()));
+            } else if ("owner_login".equals(sortParam)) {
+                cmp = Comparator
+                        .comparing(
+                                (PortfolioGithubRepoCache c) -> c.getOwnerLogin() != null ? c.getOwnerLogin() : "",
+                                String.CASE_INSENSITIVE_ORDER)
+                        .thenComparing(
+                                (PortfolioGithubRepoCache c) -> c.getName() != null ? c.getName() : "",
+                                String.CASE_INSENSITIVE_ORDER);
             } else if ("full_name".equals(sortParam)) {
                 cmp = Comparator.comparing(
                         c -> (c.getOwnerLogin() != null ? c.getOwnerLogin() : "") + "/"
@@ -398,10 +421,14 @@ public class PortfolioService {
                         Comparator.nullsLast(Comparator.reverseOrder()));
             }
             filtered.sort(cmp);
-            int from = (p - 1) * limit;
-            int to = Math.min(from + limit, filtered.size());
-            List<PortfolioGithubRepoCache> pageRows =
-                    from >= filtered.size() ? Collections.emptyList() : filtered.subList(from, to);
+            List<PortfolioGithubRepoCache> pageRows;
+            if (Boolean.TRUE.equals(visibleOnly)) {
+                pageRows = filtered;
+            } else {
+                int from = (p - 1) * limit;
+                int to = Math.min(from + limit, filtered.size());
+                pageRows = from >= filtered.size() ? Collections.emptyList() : filtered.subList(from, to);
+            }
 
             for (PortfolioGithubRepoCache c : pageRows) {
                 long repoId = c.getRepoId();
@@ -581,9 +608,7 @@ public class PortfolioService {
      * {@code languages_json} on rows already enriched via PUT/PATCH.
      * <p>
      * When calling GitHub with an OAuth token, {@code affiliation=owner,collaborator} lists repos you own or
-     * are an explicit collaborator on (not every repo visible via org membership). Additionally,
-     * {@code GET /search/commits?q=author:{login}} (paginated, max 1000 commits) adds repositories where you
-     * authored commits—including org repos you contributed to without being a collaborator.
+     * are an explicit collaborator on (not every repo visible via org membership).
      * <p>
      * Full language breakdown is written on {@code PUT/PATCH /portfolio/repositories} for selected repos.
      */
@@ -631,7 +656,6 @@ public class PortfolioService {
         int perPage = 100;
         LocalDateTime now = LocalDateTime.now();
         int synced = 0;
-        Set<Long> seenRepoIds = new HashSet<>();
         for (int p = 1; p <= 50; p++) {
             Map[] repos = fetchGithubReposPage(
                     githubUsername, githubToken, p, perPage, sortParam, visibilityParam, affiliationParam);
@@ -646,15 +670,9 @@ public class PortfolioService {
                 if (!(idObj instanceof Number)) {
                     continue;
                 }
-                long repoId = ((Number) idObj).longValue();
-                seenRepoIds.add(repoId);
                 upsertOneCachedRepoFromGithubMap(portfolio, repo, now);
                 synced++;
             }
-        }
-        if (githubToken != null && !githubToken.isEmpty()) {
-            synced += mergeContributorReposFromCommitSearch(
-                    portfolio, githubUsername, githubToken, seenRepoIds, now, warnings);
         }
         return GithubRepoCacheSyncResult.builder().reposSynced(synced).warnings(warnings).build();
     }
@@ -715,89 +733,6 @@ public class PortfolioService {
             row.setLanguages(new ArrayList<>());
         }
         portfolioGithubRepoCacheRepository.save(row);
-    }
-
-    /**
-     * Adds repos found via {@code GET /search/commits?q=author:{login}} (unique by repository id) that were not
-     * returned by {@code GET /user/repos} with affiliation owner/collaborator. Requires OAuth token.
-     * GitHub caps commit search at 1000 results.
-     */
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    private int mergeContributorReposFromCommitSearch(
-            Portfolio portfolio,
-            String githubUsername,
-            String githubToken,
-            Set<Long> seenRepoIds,
-            LocalDateTime now,
-            List<String> warnings) {
-        int added = 0;
-        try {
-            HttpHeaders headers = new HttpHeaders();
-            headers.setBearerAuth(githubToken);
-            headers.setAccept(Collections.singletonList(MediaType.parseMediaType("application/vnd.github+json")));
-            HttpEntity<Void> req = new HttpEntity<>(headers);
-            Integer totalCount = null;
-            for (int page = 1; page <= 10; page++) {
-                String url = UriComponentsBuilder.fromHttpUrl(githubApiBaseUrl + "/search/commits")
-                        .queryParam("q", "author:" + githubUsername)
-                        .queryParam("per_page", 100)
-                        .queryParam("page", page)
-                        .toUriString();
-                ResponseEntity<Map> res = restTemplate.exchange(url, HttpMethod.GET, req, Map.class);
-                Map body = res.getBody();
-                if (body == null) {
-                    break;
-                }
-                if (totalCount == null && body.get("total_count") instanceof Number) {
-                    totalCount = ((Number) body.get("total_count")).intValue();
-                    if (totalCount > 1000) {
-                        warnings.add(
-                                "CONTRIBUTOR_SEARCH_TRUNCATED: GitHub commit search returns at most 1000 commits; "
-                                        + "some contributor repositories may be missing.");
-                    }
-                }
-                Object itemsObj = body.get("items");
-                if (!(itemsObj instanceof List)) {
-                    break;
-                }
-                List<?> items = (List<?>) itemsObj;
-                if (items.isEmpty()) {
-                    break;
-                }
-                for (Object itemObj : items) {
-                    if (!(itemObj instanceof Map)) {
-                        continue;
-                    }
-                    Map<?, ?> item = (Map<?, ?>) itemObj;
-                    Object repoObj = item.get("repository");
-                    if (!(repoObj instanceof Map)) {
-                        continue;
-                    }
-                    Map<?, ?> repo = (Map<?, ?>) repoObj;
-                    Object idObj = repo.get("id");
-                    if (!(idObj instanceof Number)) {
-                        continue;
-                    }
-                    long repoId = ((Number) idObj).longValue();
-                    if (seenRepoIds.contains(repoId)) {
-                        continue;
-                    }
-                    upsertOneCachedRepoFromGithubMap(portfolio, repo, now);
-                    seenRepoIds.add(repoId);
-                    added++;
-                }
-                if (items.size() < 100) {
-                    break;
-                }
-                if (totalCount != null && page * 100 >= totalCount) {
-                    break;
-                }
-            }
-        } catch (Exception e) {
-            String msg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-            warnings.add("CONTRIBUTOR_SEARCH_FAILED: Could not merge contributor repos via commit search: " + msg);
-        }
-        return added;
     }
 
     /**

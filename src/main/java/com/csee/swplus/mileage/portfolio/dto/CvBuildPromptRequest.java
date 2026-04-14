@@ -11,6 +11,9 @@ import java.util.List;
 /**
  * Request body for POST /api/portfolio/cv/build-prompt.
  * Job info + selected portfolio item IDs to build the LLM prompt.
+ * <p>
+ * {@code mode}: {@code cv} (default) = recruiter-oriented prompt; {@code archive} = reflective self-assessment.
+ * When {@code archive}, {@code job_posting} is described in the prompt as an interest / exploration area (field name unchanged).
  */
 @Getter
 @Setter
@@ -18,7 +21,12 @@ import java.util.List;
 @AllArgsConstructor
 public class CvBuildPromptRequest {
 
-    /** 공고정보 */
+    /**
+     * {@code cv} (default when omitted or null) or {@code archive}. Any other value → 400.
+     */
+    private String mode;
+
+    /** 공고정보 (archive mode: treated as “interest area” in prompt text only). */
     private String job_posting;
 
     /** 지원 직무 */
