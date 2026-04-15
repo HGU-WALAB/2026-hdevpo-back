@@ -17,4 +17,7 @@ import java.util.List;
 public class RepositoriesResponse {
 
     private List<RepoEntryResponse> repositories;
+
+    // NOTE: This response is used by GET and PATCH flows. Write-operation metadata
+    // (warnings/skipped) is returned by dedicated DTOs (e.g. PUT response).
 }

@@ -562,8 +562,7 @@ public class PortfolioService {
 
     /**
      * Fetches one page from GitHub’s list APIs. With a token: {@code GET /user/repos} including
-     * {@code affiliation} (see caller; refresh uses {@code owner,collaborator} only—no
-     * {@code organization_member}, so org-wide repos you only see via membership are omitted).
+     * {@code affiliation} (see caller; refresh includes {@code organization_member}).
      * Without a token: {@code GET /users/{username}/repos?type=owner} (public owner repos only).
      */
     private Map[] fetchGithubReposPage(
@@ -607,8 +606,8 @@ public class PortfolioService {
      * name, url, primary language, dates, visibility, owner, stars, forks. Does not clear existing
      * {@code languages_json} on rows already enriched via PUT/PATCH.
      * <p>
-     * When calling GitHub with an OAuth token, {@code affiliation=owner,collaborator} lists repos you own or
-     * are an explicit collaborator on (not every repo visible via org membership).
+     * When calling GitHub with an OAuth token, {@code affiliation=owner,collaborator,organization_member} lists
+     * repos you own, are a collaborator on, or can see via org membership (may be larger).
      * <p>
      * Full language breakdown is written on {@code PUT/PATCH /portfolio/repositories} for selected repos.
      */
@@ -652,7 +651,7 @@ public class PortfolioService {
         }
         String sortParam = "updated";
         String visibilityParam = "all";
-        String affiliationParam = "owner,collaborator";
+        String affiliationParam = "owner,collaborator,organization_member";
         int perPage = 100;
         LocalDateTime now = LocalDateTime.now();
         int synced = 0;
@@ -979,12 +978,29 @@ public class PortfolioService {
      * PUT /api/portfolio/repositories – 선택 목록 전체 동기화 (upsert + reorder + remove).
      * 요청 본문의 repo_id는 있으면 갱신, 없으면 생성하며, 요청에 없는 기존 링크는 삭제.
      */
-    public RepositoriesResponse putRepositories(Users user, java.util.List<RepoEntryRequest> requests) {
+    public com.csee.swplus.mileage.portfolio.dto.PutRepositoriesResultResponse putRepositories(
+            Users user, java.util.List<RepoEntryRequest> requests) {
         Portfolio portfolio = getOrCreatePortfolio(user);
+        Profile profile = profileRepository.findBySnum(user.getUniqueId()).orElse(null);
+        String githubUsername = profile != null ? profile.getGithubUsername() : null;
+        String githubToken = resolveGithubToken(user);
+
+        List<String> warnings = new ArrayList<>();
+        List<String> skipped = new ArrayList<>();
+        if (githubUsername == null || githubUsername.isEmpty()) {
+            warnings.add("NO_GITHUB_USERNAME: Cannot verify contribution without GitHub username.");
+        }
+
         Set<Long> requestedRepoIds = new HashSet<>();
         if (requests != null) {
             for (RepoEntryRequest r : requests) {
-                if (r != null && r.getRepo_id() != null) {
+                if (r == null || r.getRepo_id() == null) {
+                    continue;
+                }
+                // Treat PUT payload as "selected repos". If the UI sends the full cache list with toggles,
+                // only repos with is_visible=true should be persisted as portfolio selections.
+                boolean selected = r.getIs_visible() == null || Boolean.TRUE.equals(r.getIs_visible());
+                if (selected) {
                     requestedRepoIds.add(r.getRepo_id());
                 }
             }
@@ -1002,6 +1018,27 @@ public class PortfolioService {
                 if (r == null || r.getRepo_id() == null) {
                     continue;
                 }
+                boolean selected = r.getIs_visible() == null || Boolean.TRUE.equals(r.getIs_visible());
+                if (!selected) {
+                    // Not selected -> do not create/update a PortfolioRepoEntry row.
+                    continue;
+                }
+
+                // Contribution gate (best-effort). If we can confidently say "not contributed", skip.
+                if (githubUsername != null && !githubUsername.isEmpty()) {
+                    Boolean contributed = hasUserAuthoredAnyCommit(
+                            portfolio, r.getRepo_id(), githubUsername, githubToken);
+                    if (Boolean.FALSE.equals(contributed)) {
+                        String skippedName = repoFullNameForCache(portfolio, r.getRepo_id());
+                        skipped.add(skippedName != null ? skippedName : String.valueOf(r.getRepo_id()));
+                        continue;
+                    }
+                    if (contributed == null) {
+                        warnings.add("CONTRIBUTION_CHECK_SKIPPED: Could not verify contribution for repo_id="
+                                + r.getRepo_id() + " (missing token or GitHub API error).");
+                    }
+                }
+
                 Optional<PortfolioRepoEntry> opt =
                         portfolioRepoEntryRepository.findByPortfolio_IdAndRepoId(portfolio.getId(), r.getRepo_id());
                 PortfolioRepoEntry e = opt.orElseGet(() -> PortfolioRepoEntry.builder()
@@ -1022,13 +1059,81 @@ public class PortfolioService {
                 portfolioRepoEntryRepository.save(e);
             }
             for (RepoEntryRequest r : requests) {
-                if (r != null && r.getRepo_id() != null
-                        && portfolioRepoEntryRepository.findByPortfolio_IdAndRepoId(portfolio.getId(), r.getRepo_id()).isPresent()) {
+                if (r == null || r.getRepo_id() == null) {
+                    continue;
+                }
+                boolean selected = r.getIs_visible() == null || Boolean.TRUE.equals(r.getIs_visible());
+                if (!selected) {
+                    continue;
+                }
+                if (portfolioRepoEntryRepository.findByPortfolio_IdAndRepoId(portfolio.getId(), r.getRepo_id()).isPresent()) {
                     enrichGithubRepoCacheForPortfolioRepo(portfolio, user, r.getRepo_id());
                 }
             }
         }
-        return getRepositories(user);
+        return com.csee.swplus.mileage.portfolio.dto.PutRepositoriesResultResponse.builder()
+                .warnings(warnings)
+                .skipped(skipped)
+                .build();
+    }
+
+    /**
+     * Returns true if the user has at least one authored commit on the repo.
+     * Returns false if confirmed no commits are found (within limits).
+     * Returns null when the check cannot be performed reliably (missing cache info/token, API error).
+     */
+    @SuppressWarnings("rawtypes")
+    private Boolean hasUserAuthoredAnyCommit(
+            Portfolio portfolio, Long repoId, String githubUsername, String githubToken) {
+        if (repoId == null || githubUsername == null || githubUsername.isEmpty()) {
+            return null;
+        }
+        PortfolioGithubRepoCache cache = portfolioGithubRepoCacheRepository
+                .findByPortfolio_IdAndRepoId(portfolio.getId(), repoId)
+                .orElse(null);
+        if (cache == null || cache.getOwnerLogin() == null || cache.getName() == null) {
+            return null;
+        }
+        if (githubToken == null || githubToken.isEmpty()) {
+            // Without token this will fail for private repos and may rate-limit quickly; treat as "unknown".
+            return null;
+        }
+
+        String owner = cache.getOwnerLogin();
+        String name = cache.getName();
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.setBearerAuth(githubToken);
+            headers.setAccept(Collections.singletonList(MediaType.APPLICATION_JSON));
+            HttpEntity<Void> req = new HttpEntity<>(headers);
+
+            String url = UriComponentsBuilder
+                    .fromHttpUrl(githubApiBaseUrl + "/repos/" + owner + "/" + name + "/commits")
+                    .queryParam("author", githubUsername)
+                    .queryParam("per_page", 1)
+                    .toUriString();
+            ResponseEntity<List> res = restTemplate.exchange(url, HttpMethod.GET, req, List.class);
+            Object body = res.getBody();
+            if (body instanceof List) {
+                return !((List) body).isEmpty();
+            }
+            return null;
+        } catch (Exception ex) {
+            return null;
+        }
+    }
+
+    private String repoFullNameForCache(Portfolio portfolio, Long repoId) {
+        if (portfolio == null || repoId == null) {
+            return null;
+        }
+        PortfolioGithubRepoCache cache = portfolioGithubRepoCacheRepository
+                .findByPortfolio_IdAndRepoId(portfolio.getId(), repoId)
+                .orElse(null);
+        if (cache == null || cache.getOwnerLogin() == null || cache.getName() == null) {
+            return null;
+        }
+        return cache.getOwnerLogin() + "/" + cache.getName();
     }
 
     /**
