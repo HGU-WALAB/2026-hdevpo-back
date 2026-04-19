@@ -16,7 +16,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * Logs HTTP method, path, status, and duration for each request.
  * Registered as a servlet filter with highest precedence (runs first).
- * Applies to all paths including /api/mileage/**, /mileage/**, /milestone25_1/**, etc.
+ * Applies to all paths; context path varies per deployment (e.g. /milestone25_1, /mileage, /naimkim_1).
  */
 @Slf4j
 @Component
