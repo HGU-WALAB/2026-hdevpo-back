@@ -21,7 +21,7 @@ jobs:
         run: |
           # Extract selected type from issue body
           # GitHub issue form outputs: ### label\n\nSelected Value
-          TYPE=$(echo "$BODY" | awk '/이슈 유형/{found=1; next} found && NF{print; exit}' | tr -d '[:space:]')
+          TYPE=$(echo "$BODY" | awk '/Issue Type/{found=1; next} found && NF{print; exit}' | tr -d '[:space:]')
 
           case "$TYPE" in
             Bug)
