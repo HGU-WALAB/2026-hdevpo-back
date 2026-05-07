@@ -107,14 +107,14 @@ jobs:
           echo "task_key=$task_key" >> $GITHUB_OUTPUT
           echo "Created Jira issue: $task_key"
 
-      - name: dev 브랜치 코드 체크아웃
+      - name: main 브랜치 코드 체크아웃
         uses: actions/checkout@v4
         with:
-          ref: dev
+          ref: main
 
-      - name: dev 브랜치에 Jira 티켓 번호를 사용한 브랜치 생성
+      - name: main 브랜치에 Jira 티켓 번호를 사용한 브랜치 생성
         run: |
-          git checkout dev
+          git checkout main
           git pull
           git checkout -b ${{ steps.extract_issue_type.outputs.issue_type }}/${{ steps.extract_jira_task_key.outputs.task_key }}
           git push origin ${{ steps.extract_issue_type.outputs.issue_type }}/${{ steps.extract_jira_task_key.outputs.task_key }}
@@ -139,5 +139,5 @@ jobs:
             🔗 **연결된 Jira Task**: <a href="${{ secrets.JIRA_BASE_URL }}/browse/${{ steps.extract_jira_task_key.outputs.task_key }}" target="_blank">${{ secrets.JIRA_BASE_URL }}/browse/${{ steps.extract_jira_task_key.outputs.task_key }}</a>
             ⌨️ **이슈 작업 간단 명령어**:
             ```
-            git checkout dev && git pull && git checkout -b ${{ steps.extract_issue_type.outputs.issue_type }}/${{ steps.extract_jira_task_key.outputs.task_key }} origin/${{ steps.extract_issue_type.outputs.issue_type }}/${{ steps.extract_jira_task_key.outputs.task_key }}
+            git checkout main && git pull && git checkout -b ${{ steps.extract_issue_type.outputs.issue_type }}/${{ steps.extract_jira_task_key.outputs.task_key }} origin/${{ steps.extract_issue_type.outputs.issue_type }}/${{ steps.extract_jira_task_key.outputs.task_key }}
             ```
