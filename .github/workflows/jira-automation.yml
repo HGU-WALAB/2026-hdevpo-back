@@ -67,10 +67,12 @@ jobs:
 
       - name: Jira description JSON을 문자열로 이스케이프 처리
         id: escape_description
+        env:
+          MD_TEXT: ${{ steps.md2jira.outputs.output-text }}
         run: |
           {
             echo "escaped_description<<EOF"
-            echo '${{ steps.md2jira.outputs.output-text }}' | jq -R -s .
+            printf '%s' "$MD_TEXT" | jq -R -s .
             echo "EOF"
           } >> $GITHUB_OUTPUT
 
