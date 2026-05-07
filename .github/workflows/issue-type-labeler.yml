@@ -48,8 +48,9 @@ jobs:
           # Apply label to issue
           gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --add-label "$LABEL"
 
-          # Replace [이슈] prefix in title with the type-specific prefix
-          NEW_TITLE=$(echo "$ISSUE_TITLE" | sed "s/\[issue\]/$PREFIX/")
+          # Strip any existing [xxx] prefix, then prepend the correct type prefix
+          CLEAN_TITLE=$(echo "$ISSUE_TITLE" | sed 's/^\[.*\][[:space:]]*//')
+          NEW_TITLE="$PREFIX : $CLEAN_TITLE"
           gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --title "$NEW_TITLE"
 
           echo "Applied label '$LABEL' and updated title to '$NEW_TITLE'"

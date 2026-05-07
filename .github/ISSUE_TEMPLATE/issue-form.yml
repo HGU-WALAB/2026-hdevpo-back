@@ -1,7 +1,7 @@
 # --- Template Configuration ---
 name: 'Create Issue'
 description: 'Creates a Jira task and a branch corresponding to the Jira ticket number.'
-title: '[issue] : {Issue Title}'
+title: 'Issue Title'
 
 # --- Form Body ---
 body:
