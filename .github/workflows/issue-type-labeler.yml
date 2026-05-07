@@ -40,38 +40,30 @@ jobs:
           NEW_TITLE="$PREFIX : $CLEAN_TITLE"
           gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --title "$NEW_TITLE"
 
-          # --- Set native GitHub Issue Type ---
-          ISSUE_TYPE_ID=$(gh api graphql -f query='
-            query($org: String!) {
-              organization(login: $org) {
-                issueTypes(first: 20) {
-                  nodes { id name }
-                }
+          # --- Set native GitHub Issue Type (IDs from HGU-WALAB org) ---
+          case "$TYPE" in
+            Bug)     ISSUE_TYPE_ID="IT_kwDOCDB_Xc4BLjNb" ;;
+            Feature) ISSUE_TYPE_ID="IT_kwDOCDB_Xc4BLjNd" ;;
+            Task)    ISSUE_TYPE_ID="IT_kwDOCDB_Xc4BLjNa" ;;
+          esac
+
+          ISSUE_NODE_ID=$(gh api graphql -f query='
+            query($owner: String!, $repo: String!, $number: Int!) {
+              repository(owner: $owner, name: $repo) {
+                issue(number: $number) { id }
               }
             }
-          ' -f org="$ORG" --jq ".data.organization.issueTypes.nodes[] | select(.name == \"$TYPE\") | .id" 2>/dev/null || true)
+          ' -f owner="$ORG" -f repo="$REPO_NAME" -F number="$ISSUE_NUMBER" --jq '.data.repository.issue.id')
 
-          if [ -n "$ISSUE_TYPE_ID" ]; then
-            ISSUE_NODE_ID=$(gh api graphql -f query='
-              query($owner: String!, $repo: String!, $number: Int!) {
-                repository(owner: $owner, name: $repo) {
-                  issue(number: $number) { id }
-                }
+          gh api graphql -f query='
+            mutation($issueId: ID!, $issueTypeId: ID!) {
+              updateIssue(input: {id: $issueId, issueTypeId: $issueTypeId}) {
+                issue { id }
               }
-            ' -f owner="$ORG" -f repo="$REPO_NAME" -F number="$ISSUE_NUMBER" --jq '.data.repository.issue.id')
+            }
+          ' -f issueId="$ISSUE_NODE_ID" -f issueTypeId="$ISSUE_TYPE_ID"
 
-            gh api graphql -f query='
-              mutation($issueId: ID!, $issueTypeId: ID!) {
-                updateIssue(input: {id: $issueId, issueTypeId: $issueTypeId}) {
-                  issue { id }
-                }
-              }
-            ' -f issueId="$ISSUE_NODE_ID" -f issueTypeId="$ISSUE_TYPE_ID"
-
-            echo "Set native Issue Type: '$TYPE'"
-          else
-            echo "Issue Type '$TYPE' not found in org — skipping native type"
-          fi
+          echo "Set native Issue Type: '$TYPE' ($ISSUE_TYPE_ID)"
 
           # --- Apply selected labels ---
           LABELS=$(echo "$BODY" | awk '/Labels \(optional\)/{found=1; next} found && /\[x\]/{sub(/.*\[x\] /, ""); print} found && /^###/{exit}')
