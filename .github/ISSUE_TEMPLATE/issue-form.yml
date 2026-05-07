@@ -1,32 +1,44 @@
-# --- 템플릿 기본 설정 ---
-name: '기능 추가 이슈 생성'
-description: '기능 추가 이슈를 생성하면 Jira와 연동되어 task를 생성하고 Jira 티켓 넘버에 해당하는 브랜치를 생성해줍니다.'
-title: '[feat] : 이슈 제목'
-labels: [feature]
+# --- Template Configuration ---
+name: 'Create Issue'
+description: 'Creates a Jira task and a branch corresponding to the Jira ticket number.'
+title: '[issue] : {Issue Title}'
 
-# --- 입력 폼 본문 ---
+# --- Form Body ---
 body:
+  - type: dropdown
+    id: type
+    attributes:
+      label: '🏷️ Issue Type (required)'
+      description: 'Select the type of issue'
+      options:
+        - Bug
+        - Feature
+        - Task
+    validations:
+      required: true
+
   - type: textarea
     id: description
     attributes:
-      label: '📝 이슈 상세 내용 (필수)'
-      description: '이슈에 대해 설명해주세요'
+      label: '📝 Issue Description (required)'
+      description: 'Describe the issue in detail'
       placeholder: |
-        이 템플릿은 Jira와 연동되어 task를 생성하고 Jira 티켓 넘버에 해당하는 브랜치를 생성해줍니다.
-        이슈를 생성하면 댓글에 생성된 브랜치 번호를 확인해주세요.
+        This template is linked with Jira to create a task and a branch corresponding to the Jira ticket number.
+        Once the issue is created, check the comment for the generated branch name.
     validations:
       required: true
 
   - type: textarea
     id: tasks
     attributes:
-      label: '✅ 이슈 체크리스트 (선택)'
-      description: '해당 이슈에 필요한 작업 목록을 작성해주세요'
+      label: '✅ Issue Checklist (optional)'
+      description: 'List the tasks needed to resolve this issue'
       value: |
-        - [ ] 작업1
+        - [ ] Task 1
+        - [ ] Task 2
 
   - type: textarea
     id: reference
     attributes:
-      label: '🔗 참고자료 (선택)'
-      description: '참고할 자료가 있다면 링크나 이미지를 추가해주세요.'
+      label: '🔗 References (optional)'
+      description: 'Add any links or images for reference.'

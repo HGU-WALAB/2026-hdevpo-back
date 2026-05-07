@@ -1,0 +1,55 @@
+name: Issue Type Labeler
+
+on:
+  issues:
+    types: [opened]
+
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+
+    steps:
+      - name: Apply label and update title based on selected type
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          BODY: ${{ github.event.issue.body }}
+          REPO: ${{ github.repository }}
+        run: |
+          # Extract selected type from issue body
+          # GitHub issue form outputs: ### label\n\nSelected Value
+          TYPE=$(echo "$BODY" | awk '/이슈 유형/{found=1; next} found && NF{print; exit}' | tr -d '[:space:]')
+
+          case "$TYPE" in
+            Bug)
+              LABEL="bug"
+              PREFIX="[bug]"
+              ;;
+            Feature)
+              LABEL="feature"
+              PREFIX="[feat]"
+              ;;
+            Task)
+              LABEL="task"
+              PREFIX="[task]"
+              ;;
+            *)
+              echo "Unknown type: '$TYPE' — skipping"
+              exit 0
+              ;;
+          esac
+
+          # Create label if it doesn't exist yet
+          gh label create "$LABEL" --repo "$REPO" 2>/dev/null || true
+
+          # Apply label to issue
+          gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --add-label "$LABEL"
+
+          # Replace [이슈] prefix in title with the type-specific prefix
+          NEW_TITLE=$(echo "$ISSUE_TITLE" | sed "s/\[issue\]/$PREFIX/")
+          gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --title "$NEW_TITLE"
+
+          echo "Applied label '$LABEL' and updated title to '$NEW_TITLE'"
