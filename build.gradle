@@ -49,3 +49,11 @@ tasks.named('test') {
 	// To skip tests, run: ./gradlew clean build -x test
 	// Or set: test.enabled = false
 }
+
+tasks.register('updateGitHooks', Copy) {
+	from './scripts/prepare-commit-msg'
+	into './.git/hooks'
+	fileMode 0775
+}
+
+tasks.build.dependsOn updateGitHooks
