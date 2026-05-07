@@ -11,7 +11,7 @@ jobs:
       issues: write
 
     steps:
-      - name: Apply label and update title based on selected type
+      - name: Apply labels, update title, and set native Issue Type
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
@@ -19,38 +19,71 @@ jobs:
           BODY: ${{ github.event.issue.body }}
           REPO: ${{ github.repository }}
         run: |
-          # Extract selected type from issue body
-          # GitHub issue form outputs: ### label\n\nSelected Value
+          # --- Extract issue type from form ---
           TYPE=$(echo "$BODY" | awk '/Issue Type/{found=1; next} found && NF{print; exit}' | tr -d '[:space:]')
 
           case "$TYPE" in
-            Bug)
-              LABEL="bug"
-              PREFIX="[bug]"
-              ;;
-            Feature)
-              LABEL="feature"
-              PREFIX="[feat]"
-              ;;
-            Task)
-              LABEL="task"
-              PREFIX="[task]"
-              ;;
+            Bug)     PREFIX="[bug]" ;;
+            Feature) PREFIX="[feat]" ;;
+            Task)    PREFIX="[task]" ;;
             *)
               echo "Unknown type: '$TYPE' — skipping"
               exit 0
               ;;
           esac
 
-          # Create label if it doesn't exist yet
-          gh label create "$LABEL" --repo "$REPO" 2>/dev/null || true
+          ORG=$(echo "$REPO" | cut -d'/' -f1)
+          REPO_NAME=$(echo "$REPO" | cut -d'/' -f2)
 
-          # Apply label to issue
-          gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --add-label "$LABEL"
-
-          # Strip any existing [xxx] prefix, then prepend the correct type prefix
+          # --- Update title prefix ---
           CLEAN_TITLE=$(echo "$ISSUE_TITLE" | sed 's/^\[.*\][[:space:]]*//')
           NEW_TITLE="$PREFIX : $CLEAN_TITLE"
           gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --title "$NEW_TITLE"
 
-          echo "Applied label '$LABEL' and updated title to '$NEW_TITLE'"
+          # --- Set native GitHub Issue Type ---
+          ISSUE_TYPE_ID=$(gh api graphql -f query='
+            query($org: String!) {
+              organization(login: $org) {
+                issueTypes(first: 20) {
+                  nodes { id name }
+                }
+              }
+            }
+          ' -f org="$ORG" --jq ".data.organization.issueTypes.nodes[] | select(.name == \"$TYPE\") | .id" 2>/dev/null || true)
+
+          if [ -n "$ISSUE_TYPE_ID" ]; then
+            ISSUE_NODE_ID=$(gh api graphql -f query='
+              query($owner: String!, $repo: String!, $number: Int!) {
+                repository(owner: $owner, name: $repo) {
+                  issue(number: $number) { id }
+                }
+              }
+            ' -f owner="$ORG" -f repo="$REPO_NAME" -F number="$ISSUE_NUMBER" --jq '.data.repository.issue.id')
+
+            gh api graphql -f query='
+              mutation($issueId: ID!, $issueTypeId: ID!) {
+                updateIssue(input: {id: $issueId, issueTypeId: $issueTypeId}) {
+                  issue { id }
+                }
+              }
+            ' -f issueId="$ISSUE_NODE_ID" -f issueTypeId="$ISSUE_TYPE_ID"
+
+            echo "Set native Issue Type: '$TYPE'"
+          else
+            echo "Issue Type '$TYPE' not found in org — skipping native type"
+          fi
+
+          # --- Apply selected labels ---
+          LABELS=$(echo "$BODY" | awk '/Labels \(optional\)/{found=1; next} found && /\[x\]/{sub(/.*\[x\] /, ""); print} found && /^###/{exit}')
+
+          if [ -n "$LABELS" ]; then
+            while IFS= read -r label; do
+              [ -z "$label" ] && continue
+              # Strip inline description (e.g. "bug — Something isn't working" → "bug")
+              label_name=$(echo "$label" | sed 's/ —.*//' | sed 's/[[:space:]]*$//')
+              gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --add-label "$label_name"
+            done <<< "$LABELS"
+          fi
+
+          echo "Updated title to '$NEW_TITLE'"
+          echo "Applied labels: $(echo "$LABELS" | sed 's/ —.*//' | tr '\n' ', ')"
