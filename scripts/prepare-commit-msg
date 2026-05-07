@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# 현재 브랜치 이름 가져오기 (예: feat/KAN-123 -> KAN-123)
+# 현재 브랜치 이름 가져오기 (예: feat/KAN-123 -> KAN-123) - KAN은 현재 JIRA 프로젝트의 고유 부여받은 코드임.
 BRANCH_NAME=$(git branch --show-current) # 현재 브랜치명을 가져옴
 BRANCH_NAME="${BRANCH_NAME##*/}" # / 부분을 기준으로 앞 부분을 제거
 
