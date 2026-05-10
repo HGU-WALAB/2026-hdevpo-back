@@ -1,0 +1,60 @@
+# --- Template Configuration ---
+name: 'Create Issue'
+description: 'Creates a Jira task and a branch corresponding to the Jira ticket number.'
+title: 'Issue Title'
+
+# --- Form Body ---
+body:
+  - type: dropdown
+    id: type
+    attributes:
+      label: '📌 Issue Type (required)'
+      description: 'Select the type of issue'
+      options:
+        - Bug
+        - Feature
+        - Task
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: labels
+    attributes:
+      label: '🏷️ Labels (optional)'
+      description: 'Select labels to apply to this issue'
+      options:
+        - label: "bug — Something isn't working"
+        - label: "documentation — Improvements or additions to documentation"
+        - label: "duplicate — This issue or pull request already exists"
+        - label: "enhancement — New feature or request"
+        - label: "good first issue — Good for newcomers"
+        - label: "help wanted — Extra attention is needed"
+        - label: "invalid — This doesn't seem right"
+        - label: "question — Further information is requested"
+        - label: "wontfix — This will not be worked on"
+
+  - type: textarea
+    id: description
+    attributes:
+      label: '📝 Issue Description (required)'
+      description: 'Describe the issue in detail'
+      placeholder: |
+        This template is linked with Jira to create a task and a branch corresponding to the Jira ticket number.
+        Once the issue is created, check the comment for the generated branch name.
+    validations:
+      required: true
+
+  - type: textarea
+    id: tasks
+    attributes:
+      label: '✅ Issue Checklist (optional)'
+      description: 'List the tasks needed to resolve this issue'
+      value: |
+        - [ ] Task 1
+        - [ ] Task 2
+
+  - type: textarea
+    id: reference
+    attributes:
+      label: '🔗 References (optional)'
+      description: 'Add any links or images for reference.'

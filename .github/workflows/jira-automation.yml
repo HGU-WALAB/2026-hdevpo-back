@@ -1,0 +1,151 @@
+name: GitHub 이슈 → Jira 이슈 생성 및 브랜치 자동화
+on:
+  issues:
+    types:
+      - opened
+
+jobs:
+  create-jira-and-branch:
+    name: Jira Task 생성 및 브랜치 생성
+    runs-on: ubuntu-latest
+    steps:
+      - name: main 브랜치 코드 체크아웃
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      # ref : https://github.com/peter-evans/jira2md
+      - name: Github 이슈 마크다운을 Jira 마크다운 문법으로 변환
+        uses: peter-evans/jira2md@v1
+        id: md2jira
+        with:
+          input-text: |
+            ### Github Issue Link
+            - ${{ github.event.issue.html_url }}
+
+            ${{ github.event.issue.body }}
+          mode: md2jira
+
+      - name: 이슈 타입 추출 (제목 대신 body에서 파싱)
+        id: extract_issue_type
+        run: |
+          body="${{ github.event.issue.body }}"
+
+          raw_type=$(echo "$body" | awk '/Issue Type/{found=1; next} found && NF{print; exit}' | tr -d '[:space:]')
+
+          case "$raw_type" in
+            Bug)
+              issue_type="bug"
+              jira_type="Bug"
+              ;;
+            Feature)
+              issue_type="feat"
+              jira_type="Story"
+              ;;
+            Task)
+              issue_type="task"
+              jira_type="Task"
+              ;;
+            *)
+              echo "Unknown type: '$raw_type'"
+              exit 1
+              ;;
+          esac
+
+          echo "issue_type=$issue_type" >> $GITHUB_OUTPUT
+          echo "jira_type=$jira_type" >> $GITHUB_OUTPUT
+
+      - name: 제목에서 [타입]을 [BE/타입]으로 변환
+        id: convert_title
+        run: |
+          title="${{ github.event.issue.title }}"
+          issue_type="${{ steps.extract_issue_type.outputs.issue_type }}"
+          # 기존 [xxx] prefix 제거 후 Jira용 prefix 추가
+          title_without_type=$(echo "$title" | sed 's/^\[[^]]*\][[:space:]]*//')
+          converted_title="[BE/$issue_type] $title_without_type"
+          echo "converted_title=$converted_title" >> $GITHUB_OUTPUT
+          # branch용 제목: 소문자, 공백→하이픈, 특수문자 제거, 30자 제한
+          branch_title=$(echo "$title_without_type" \
+            | tr '[:upper:]' '[:lower:]' \
+            | sed 's/[^a-z0-9 ]//g' \
+            | sed 's/[[:space:]]\+/-/g' \
+            | sed 's/^-\|-$//g' \
+            | cut -c1-30)
+          echo "branch_title=$branch_title" >> $GITHUB_OUTPUT
+
+      - name: Jira description JSON을 문자열로 이스케이프 처리
+        id: escape_description
+        env:
+          MD_TEXT: ${{ steps.md2jira.outputs.output-text }}
+        run: |
+          {
+            echo "escaped_description<<EOF"
+            printf '%s' "$MD_TEXT" | jq -R -s .
+            echo "EOF"
+          } >> $GITHUB_OUTPUT
+
+      # ref : https://developer.atlassian.com/cloud/jira/platform/rest/v2/api-group-issues/#api-rest-api-2-issue-post
+      - name: Jira Task 생성
+        id: create_jira_task
+        uses: fjogeleit/http-request-action@v1
+        with:
+          url: '${{ secrets.JIRA_BASE_URL }}/rest/api/2/issue'
+          method: 'POST'
+          username: '${{ secrets.JIRA_USER_EMAIL }}'
+          password: '${{ secrets.JIRA_API_TOKEN }}'
+          customHeaders: '{"Content-Type": "application/json"}'
+          data: |
+            {
+              "fields": {
+                "project": {
+                  "key": "${{ secrets.JIRA_PROJECT_KEY }}"
+                },
+                "issuetype": {
+                  "name": "${{ steps.extract_issue_type.outputs.jira_type }}"
+                },
+                "summary": "${{ steps.convert_title.outputs.converted_title }}",
+                "description": ${{ steps.escape_description.outputs.escaped_description }}
+              }
+            }
+
+      - name: Jira task 키 추출
+        id: extract_jira_task_key
+        run: |
+          task_key=$(echo '${{ steps.create_jira_task.outputs.response }}' | jq -r '.key')
+          echo "task_key=$task_key" >> $GITHUB_OUTPUT
+          echo "Created Jira issue: $task_key"
+
+      - name: main 브랜치 코드 체크아웃
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: main 브랜치에 Jira 티켓 번호를 사용한 브랜치 생성
+        run: |
+          git checkout main
+          git pull
+          git checkout -b ${{ steps.extract_issue_type.outputs.issue_type }}/${{ steps.extract_jira_task_key.outputs.task_key }}/${{ steps.convert_title.outputs.branch_title }}
+          git push origin ${{ steps.extract_issue_type.outputs.issue_type }}/${{ steps.extract_jira_task_key.outputs.task_key }}/${{ steps.convert_title.outputs.branch_title }}
+
+      # ref : https://github.com/actions-cool/issues-helper
+      - name: 담당자 할당
+        uses: actions-cool/issues-helper@v3
+        with:
+          actions: 'add-assignees'
+          token: ${{ secrets.GIT_TOKEN }}
+          issue-number: ${{ github.event.issue.number }}
+          assignees: ${{ github.event.issue.user.login }}
+
+      - name: 브랜치 생성 및 Jira 링크 댓글 추가
+        uses: actions-cool/issues-helper@v3
+        with:
+          actions: 'create-comment'
+          token: ${{ secrets.GIT_TOKEN }}
+          issue-number: ${{ github.event.issue.number }}
+          body: |
+            🪾 **생성된 브랜치**: `${{ steps.extract_issue_type.outputs.issue_type }}/${{ steps.extract_jira_task_key.outputs.task_key }}/${{ steps.convert_title.outputs.branch_title }}`
+            🔗 **연결된 Jira Task**: <a href="${{ secrets.JIRA_BASE_URL }}/browse/${{ steps.extract_jira_task_key.outputs.task_key }}" target="_blank">${{ secrets.JIRA_BASE_URL }}/browse/${{ steps.extract_jira_task_key.outputs.task_key }}</a>
+            ⌨️ **이슈 작업 간단 명령어**:
+            ```
+            git checkout main && git pull && git checkout -b ${{ steps.extract_issue_type.outputs.issue_type }}/${{ steps.extract_jira_task_key.outputs.task_key }}/${{ steps.convert_title.outputs.branch_title }} origin/${{ steps.extract_issue_type.outputs.issue_type }}/${{ steps.extract_jira_task_key.outputs.task_key }}/${{ steps.convert_title.outputs.branch_title }}
+            ```
