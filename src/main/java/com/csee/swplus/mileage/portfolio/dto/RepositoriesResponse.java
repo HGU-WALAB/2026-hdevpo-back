@@ -18,6 +18,9 @@ public class RepositoriesResponse {
 
     private List<RepoEntryResponse> repositories;
 
+    /** Total repositories matching the current filters (owner/search/visibility), before pagination. */
+    private Integer total;
+
     // NOTE: This response is used by GET and PATCH flows. Write-operation metadata
     // (warnings/skipped) is returned by dedicated DTOs (e.g. PUT response).
 }

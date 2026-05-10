@@ -377,6 +377,9 @@ public class PortfolioService {
         String visibilityParam = (visibility != null && visibility.matches("all|public|private")) ? visibility : "all";
 
         java.util.List<RepoEntryResponse> list = new java.util.ArrayList<>();
+        // Total matches for the FE pagination/counter (after owner/visibility/search filters,
+        // before page slicing and the post-mapping selected_only/visible_only filter).
+        int totalMatching = 0;
 
         if (githubUsername != null && !githubUsername.isEmpty()) {
             List<PortfolioGithubRepoCache> cached =
@@ -421,6 +424,7 @@ public class PortfolioService {
                         Comparator.nullsLast(Comparator.reverseOrder()));
             }
             filtered.sort(cmp);
+            totalMatching = filtered.size();
             List<PortfolioGithubRepoCache> pageRows;
             if (Boolean.TRUE.equals(visibleOnly)) {
                 pageRows = filtered;
@@ -470,6 +474,7 @@ public class PortfolioService {
             if (search != null && !search.trim().isEmpty()) {
                 entryList.removeIf(e -> !matchesRepoEntrySearch(search.trim(), e));
             }
+            totalMatching = entryList.size();
             for (PortfolioRepoEntry e : entryList) {
                 list.add(RepoEntryResponse.builder()
                         .id(e.getId())
@@ -490,7 +495,10 @@ public class PortfolioService {
             list.removeIf(r -> r.getId() == null);
         }
 
-        return RepositoriesResponse.builder().repositories(list).build();
+        return RepositoriesResponse.builder()
+                .repositories(list)
+                .total(totalMatching)
+                .build();
     }
 
     private static boolean searchFieldContains(String haystack, String needleLower) {
