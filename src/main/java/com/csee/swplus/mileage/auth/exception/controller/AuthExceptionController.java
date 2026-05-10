@@ -7,8 +7,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+import javax.validation.ConstraintViolationException;
+import java.util.stream.Collectors;
 
 @RestControllerAdvice
 @Slf4j
@@ -31,6 +36,30 @@ public class AuthExceptionController {
                 .message(e.getMessage())
                 .build();
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ExceptionResponse> handleMethodArgumentNotValid(MethodArgumentNotValidException e) {
+        String message = e.getBindingResult().getFieldErrors().stream()
+                .map(fe -> fieldName(fe) + ": " + (fe.getDefaultMessage() != null ? fe.getDefaultMessage() : "invalid"))
+                .collect(Collectors.joining("; "));
+        if (message.isEmpty()) {
+            message = "Validation failed";
+        }
+        log.warn("Validation failed: {}", message);
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
+                ExceptionResponse.builder().error("Bad Request").message(message).build());
+    }
+
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ExceptionResponse> handleConstraintViolation(ConstraintViolationException e) {
+        log.warn("ConstraintViolationException: {}", e.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
+                ExceptionResponse.builder().error("Bad Request").message(e.getMessage()).build());
+    }
+
+    private static String fieldName(FieldError fe) {
+        return fe.getField() != null && !fe.getField().isEmpty() ? fe.getField() : fe.getObjectName();
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

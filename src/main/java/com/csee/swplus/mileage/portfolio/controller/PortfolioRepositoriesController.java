@@ -85,10 +85,13 @@ public class PortfolioRepositoriesController {
      * PATCH …/{id} — portfolio 링크 PK(id)로 수정 + GitHub 보강.
      */
     @PatchMapping("/{id}")
-    @Operation(summary = "단일 레포 설정 수정")
+    @Operation(summary = "단일 레포 설정 수정",
+            description = "부분 업데이트. team_composition / my_role / key_contributions를 함께 수정할 수 있습니다. "
+                    + "team_composition: [{role, count}], my_role: {role, contribution_percent (0–100)}, "
+                    + "key_contributions: 자유 텍스트 (최대 2000자). null = 변경 안 함, 값 = 교체.")
     public ResponseEntity<RepoEntryResponse> patchRepository(
             @PathVariable Long id,
-            @RequestBody RepoPatchRequest request) {
+            @Valid @RequestBody RepoPatchRequest request) {
         Users user = getCurrentUser();
         return ResponseEntity.ok(
                 portfolioService.patchRepository(user, id, request != null ? request : new RepoPatchRequest()));
