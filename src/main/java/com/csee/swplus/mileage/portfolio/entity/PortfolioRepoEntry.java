@@ -77,4 +77,12 @@ public class PortfolioRepoEntry extends BaseTime {
      */
     @Column(name = "key_contributions", columnDefinition = "TEXT")
     private String keyContributions;
+
+    /** User override for repo start (ISO-8601 string). {@code null} = use GitHub value for display. */
+    @Column(name = "started_at_override", length = 40)
+    private String startedAtOverride;
+
+    /** User override for repo last update (ISO-8601 string). {@code null} = use GitHub value for display. */
+    @Column(name = "updated_at_override", length = 40)
+    private String updatedAtOverride;
 }

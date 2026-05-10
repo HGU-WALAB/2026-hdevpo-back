@@ -5,6 +5,8 @@ import com.csee.swplus.mileage.portfolio.dto.ActivityPatchRequest;
 import com.csee.swplus.mileage.portfolio.dto.ActivityRequest;
 import com.csee.swplus.mileage.portfolio.dto.ActivityResponse;
 import com.csee.swplus.mileage.portfolio.dto.ActivitiesResponse;
+import com.csee.swplus.mileage.portfolio.dto.DurationDto;
+import com.csee.swplus.mileage.portfolio.dto.DurationPatchDto;
 import com.csee.swplus.mileage.portfolio.dto.MileageEntryRequest;
 import com.csee.swplus.mileage.portfolio.dto.MyRoleDto;
 import com.csee.swplus.mileage.portfolio.dto.TeamRoleDto;
@@ -61,6 +63,12 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -495,6 +503,7 @@ public class PortfolioService {
                         .team_composition(selected != null ? selected.getTeamComposition() : null)
                         .my_role(buildMyRoleDto(selected))
                         .key_contributions(selected != null ? selected.getKeyContributions() : null)
+                        .duration(buildDurationDto(selected, c.getGithubCreatedAt(), c.getGithubUpdatedAt()))
                         .build());
             }
         } else {
@@ -516,6 +525,7 @@ public class PortfolioService {
                         .team_composition(e.getTeamComposition())
                         .my_role(buildMyRoleDto(e))
                         .key_contributions(e.getKeyContributions())
+                        .duration(buildDurationDto(e, null, null))
                         .build());
             }
         }
@@ -986,6 +996,108 @@ public class PortfolioService {
                 .build();
     }
 
+    /**
+     * Validates a non-empty ISO-8601 date or datetime string (Instant, OffsetDateTime, or local date).
+     */
+    private static void assertValidIso8601(String value) {
+        if (value == null || value.isEmpty()) {
+            return;
+        }
+        parseToInstantForOrdering(value);
+    }
+
+    /**
+     * Parses common ISO-8601 shapes for ordering and validation. Throws {@link IllegalArgumentException} if invalid.
+     */
+    private static Instant parseToInstantForOrdering(String value) {
+        if (value == null || value.isEmpty()) {
+            throw new IllegalArgumentException("duration value must not be blank");
+        }
+        String v = value.trim();
+        try {
+            return Instant.parse(v);
+        } catch (DateTimeParseException ignored) {
+            // continue
+        }
+        try {
+            return OffsetDateTime.parse(v).toInstant();
+        } catch (DateTimeParseException ignored) {
+            // continue
+        }
+        try {
+            LocalDate d = LocalDate.parse(v, DateTimeFormatter.ISO_LOCAL_DATE);
+            return d.atStartOfDay(ZoneOffset.UTC).toInstant();
+        } catch (DateTimeParseException ignored) {
+            // continue
+        }
+        try {
+            return LocalDateTime.parse(v, DateTimeFormatter.ISO_LOCAL_DATE_TIME).atZone(ZoneOffset.UTC).toInstant();
+        } catch (DateTimeParseException e) {
+            throw new IllegalArgumentException(
+                    "duration value must be ISO-8601 (date or datetime): " + value, e);
+        }
+    }
+
+    private static void validateDurationOverridesOrdering(PortfolioRepoEntry entry) {
+        String s = entry.getStartedAtOverride();
+        String u = entry.getUpdatedAtOverride();
+        if (s == null || u == null || s.isEmpty() || u.isEmpty()) {
+            return;
+        }
+        Instant is = parseToInstantForOrdering(s);
+        Instant iu = parseToInstantForOrdering(u);
+        if (is.isAfter(iu)) {
+            throw new IllegalArgumentException("duration.started_at must be <= duration.updated_at");
+        }
+    }
+
+    private void applyDurationPatch(PortfolioRepoEntry entry, RepoPatchRequest request) {
+        if (request.getDuration() == null) {
+            return;
+        }
+        DurationPatchDto d = request.getDuration();
+        if (d.getStarted_at() != null) {
+            String v = d.getStarted_at();
+            if (v.isEmpty()) {
+                entry.setStartedAtOverride(null);
+            } else {
+                assertValidIso8601(v);
+                entry.setStartedAtOverride(v.trim());
+            }
+        }
+        if (d.getUpdated_at() != null) {
+            String v = d.getUpdated_at();
+            if (v.isEmpty()) {
+                entry.setUpdatedAtOverride(null);
+            } else {
+                assertValidIso8601(v);
+                entry.setUpdatedAtOverride(v.trim());
+            }
+        }
+        validateDurationOverridesOrdering(entry);
+    }
+
+    /**
+     * Builds the duration block for API responses. {@code null} when no GitHub times and no overrides.
+     */
+    private static DurationDto buildDurationDto(
+            PortfolioRepoEntry entry, String githubCreatedAt, String githubUpdatedAt) {
+        String startedOverride = entry != null ? entry.getStartedAtOverride() : null;
+        String updatedOverride = entry != null ? entry.getUpdatedAtOverride() : null;
+        if (githubCreatedAt == null
+                && githubUpdatedAt == null
+                && startedOverride == null
+                && updatedOverride == null) {
+            return null;
+        }
+        return DurationDto.builder()
+                .started_at_github(githubCreatedAt)
+                .updated_at_github(githubUpdatedAt)
+                .started_at(startedOverride)
+                .updated_at(updatedOverride)
+                .build();
+    }
+
     private RepoEntryResponse applyRepositoryPatchAndEnrich(
             Portfolio portfolio, PortfolioRepoEntry entry, RepoPatchRequest request, Users user) {
         if (request.getCustom_title() != null) {
@@ -1001,6 +1113,7 @@ public class PortfolioService {
             entry.setDisplayOrder(request.getDisplay_order());
         }
         applyContributionPatch(entry, request);
+        applyDurationPatch(entry, request);
         portfolioRepoEntryRepository.save(entry);
 
         String name = null;
@@ -1081,6 +1194,7 @@ public class PortfolioService {
                 .team_composition(entry.getTeamComposition())
                 .my_role(buildMyRoleDto(entry))
                 .key_contributions(entry.getKeyContributions())
+                .duration(buildDurationDto(entry, createdAt, updatedAt))
                 .github_title(name)
                 .html_url(htmlUrl)
                 .language(language)

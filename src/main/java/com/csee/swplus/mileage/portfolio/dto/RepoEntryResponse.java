@@ -75,4 +75,10 @@ public class RepoEntryResponse {
      * (multi-line).
      */
     private String key_contributions;
+
+    /**
+     * GitHub-created/updated times from cache plus user overrides.
+     * Top-level {@link #created_at} / {@link #updated_at} remain for backwards compatibility (same as GitHub values when present).
+     */
+    private DurationDto duration;
 }

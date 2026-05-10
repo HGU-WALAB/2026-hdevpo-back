@@ -46,6 +46,7 @@ public class PortfolioRepositoriesController {
 
                             + "owner: owner_login 기준으로 조직/유저를 정확히 일치시켜 필터링합니다. "
                             + "search: 이름, owner, URL, 설명, 언어, repo_id, 커스텀 제목/설명에 대해 부분 일치 검색이며 공백은 AND 조건입니다. "
+                            + "각 항목에 duration (GitHub created/updated + 사용자 override) 이 포함됩니다. "
     )
     public ResponseEntity<RepositoriesResponse> getRepositories(
             @RequestParam(value = "page", required = false) Integer page,
@@ -86,9 +87,11 @@ public class PortfolioRepositoriesController {
      */
     @PatchMapping("/{id}")
     @Operation(summary = "단일 레포 설정 수정",
-            description = "부분 업데이트. team_composition / my_role / key_contributions를 함께 수정할 수 있습니다. "
+            description = "부분 업데이트. team_composition / my_role / key_contributions / duration 을 함께 수정할 수 있습니다. "
                     + "team_composition: [{role, count}], my_role: {role, contribution_percent (0–100)}, "
-                    + "key_contributions: 자유 텍스트 (최대 2000자). null = 변경 안 함, 값 = 교체.")
+                    + "key_contributions: 자유 텍스트 (최대 2000자). null = 변경 안 함, 값 = 교체. "
+                    + "duration: { started_at, updated_at } — ISO-8601 날짜/시간; 필드 생략 = 유지, \"\" = 해당 override 삭제, "
+                    + "값 = override 설정. 두 override가 모두 있으면 started_at <= updated_at (400).")
     public ResponseEntity<RepoEntryResponse> patchRepository(
             @PathVariable Long id,
             @Valid @RequestBody RepoPatchRequest request) {
