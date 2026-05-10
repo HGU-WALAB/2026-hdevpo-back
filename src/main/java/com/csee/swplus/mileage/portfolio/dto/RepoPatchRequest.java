@@ -48,4 +48,11 @@ public class RepoPatchRequest {
      */
     @Size(max = 2000)
     private String key_contributions;
+
+    /**
+     * Optional duration overrides ({@code started_at}, {@code updated_at} as ISO-8601).
+     * {@code null} = do not change duration overrides.
+     */
+    @Valid
+    private DurationPatchDto duration;
 }
