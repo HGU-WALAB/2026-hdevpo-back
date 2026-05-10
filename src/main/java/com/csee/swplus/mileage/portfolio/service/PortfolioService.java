@@ -6,6 +6,8 @@ import com.csee.swplus.mileage.portfolio.dto.ActivityRequest;
 import com.csee.swplus.mileage.portfolio.dto.ActivityResponse;
 import com.csee.swplus.mileage.portfolio.dto.ActivitiesResponse;
 import com.csee.swplus.mileage.portfolio.dto.MileageEntryRequest;
+import com.csee.swplus.mileage.portfolio.dto.MyRoleDto;
+import com.csee.swplus.mileage.portfolio.dto.TeamRoleDto;
 import com.csee.swplus.mileage.portfolio.dto.MileageEntryResponse;
 import com.csee.swplus.mileage.portfolio.dto.MileageLinkRequest;
 import com.csee.swplus.mileage.portfolio.dto.MileageListResponse;
@@ -100,7 +102,8 @@ public class PortfolioService {
 
     /**
      * Fetches all languages for a repo via GET /repos/{owner}/{repo}/languages.
-     * Returns languages sorted by byte count descending (primary first) with percentage. Limited to 15.
+     * Returns languages sorted by byte count descending (primary first) with
+     * percentage. Limited to 15.
      */
     @SuppressWarnings("unchecked")
     private List<RepoLanguageDto> fetchRepoLanguages(String owner, String repoName, String githubToken) {
@@ -120,24 +123,27 @@ public class PortfolioService {
             }
             ResponseEntity<Map> res = restTemplate.exchange(url, HttpMethod.GET, req, Map.class);
             Map<String, Object> raw = res.getBody();
-            if (raw == null || raw.isEmpty()) return Collections.emptyList();
+            if (raw == null || raw.isEmpty())
+                return Collections.emptyList();
 
             long totalBytes = raw.entrySet().stream()
                     .filter(e -> e.getValue() instanceof Number)
                     .mapToLong(e -> ((Number) e.getValue()).longValue())
                     .sum();
-            if (totalBytes == 0) return Collections.emptyList();
+            if (totalBytes == 0)
+                return Collections.emptyList();
 
             return raw.entrySet().stream()
                     .filter(e -> e.getValue() instanceof Number)
-                    .sorted(Comparator.<Map.Entry<String, Object>>comparingLong(e -> ((Number) e.getValue()).longValue()).reversed())
+                    .sorted(Comparator.<Map.Entry<String, Object>>comparingLong(
+                            e -> ((Number) e.getValue()).longValue()).reversed())
                     .limit(15)
                     .map(e -> {
                         long bytes = ((Number) e.getValue()).longValue();
                         double pct = totalBytes > 0 ? 100.0 * bytes / totalBytes : 0;
                         return RepoLanguageDto.builder()
                                 .name(e.getKey())
-                                .percentage(Math.round(pct * 10) / 10.0)  // 1 decimal place
+                                .percentage(Math.round(pct * 10) / 10.0) // 1 decimal place
                                 .build();
                     })
                     .collect(Collectors.toList());
@@ -167,11 +173,14 @@ public class PortfolioService {
     }
 
     /**
-     * PATCH /api/portfolio/user-info (JSON) 및 PUT /api/portfolio/user-info/image (파일)에서 사용.
+     * PATCH /api/portfolio/user-info (JSON) 및 PUT /api/portfolio/user-info/image
+     * (파일)에서 사용.
      *
-     * @param profileLinks {@code null} = do not change links; otherwise replace with normalized list (empty = clear).
+     * @param profileLinks {@code null} = do not change links; otherwise replace
+     *                     with normalized list (empty = clear).
      */
-    public UserInfoResponse updateBio(Users user, String bio, String profileImageUrl, List<ProfileLinkDto> profileLinks) {
+    public UserInfoResponse updateBio(Users user, String bio, String profileImageUrl,
+            List<ProfileLinkDto> profileLinks) {
         Portfolio portfolio = getOrCreatePortfolio(user);
         if (bio != null) {
             portfolio.setBio(bio);
@@ -257,8 +266,9 @@ public class PortfolioService {
         portfolioDomainRepository.deleteBySnum(snum);
         portfolioDomainRepository.flush();
 
-        java.util.List<TechStackDomainPutDto> domains =
-                request != null && request.getDomains() != null ? request.getDomains() : java.util.Collections.emptyList();
+        java.util.List<TechStackDomainPutDto> domains = request != null && request.getDomains() != null
+                ? request.getDomains()
+                : java.util.Collections.emptyList();
         int fallbackOrder = 0;
         for (TechStackDomainPutDto dto : domains) {
             if (dto == null || dto.getName() == null || dto.getName().trim().isEmpty()) {
@@ -299,8 +309,10 @@ public class PortfolioService {
     }
 
     /**
-     * GET/PATCH response {@code description}: stored user text on the link when non-blank;
-     * otherwise GitHub description (cache or live fetch). User clears override with PATCH {@code ""}.
+     * GET/PATCH response {@code description}: stored user text on the link when
+     * non-blank;
+     * otherwise GitHub description (cache or live fetch). User clears override with
+     * PATCH {@code ""}.
      */
     private static String effectiveRepoDescription(String storedUserDescription, String githubDescription) {
         if (storedUserDescription != null && !storedUserDescription.trim().isEmpty()) {
@@ -322,7 +334,8 @@ public class PortfolioService {
 
     /**
      * GET /api/portfolio/repositories – GitHub 레포 목록 + (선택된 레포에 한해) 커스텀 설정 정보.
-     * Pagination: ?page=&per_page=. Filters: ?selected_only=, ?visible_only=, ?sort=, ?visibility=.
+     * Pagination: ?page=&per_page=. Filters: ?selected_only=, ?visible_only=,
+     * ?sort=, ?visibility=.
      */
     public RepositoriesResponse getRepositories(Users user, Integer page, Integer perPage,
             Boolean selectedOnly, Boolean visibleOnly) {
@@ -330,16 +343,26 @@ public class PortfolioService {
     }
 
     /**
-     * Full getRepositories with sort and visibility. When GitHub is linked, the list is read only from
-     * {@code _sw_mileage_portfolio_github_repo_cache} (paginated in memory unless {@code visible_only=true},
-     * in which case {@code page} / {@code per_page} are ignored and all visible portfolio repos are returned).
-     * Run POST …/github-cache/refresh to populate. Optional {@code search} filters cached rows
-     * (repo name, owner, URL, description, language, repo id, custom title / description on linked portfolio
-     * entries) before sort and pagination (or before returning the full visible-only list).
-     * This endpoint does not accept GitHub’s {@code affiliation} query (it is not stored per cache
-     * row). Separately, note that GitHub’s {@code affiliation} on {@code GET /user/repos} classifies each repo
-     * by relationship (owner / collaborator / organization member) for that <em>listing</em> API—it does not mean
-     * “every repository I have committed to.” PATCH a repo to pull fresh GitHub detail into the cache for that row.
+     * Full getRepositories with sort and visibility. When GitHub is linked, the
+     * list is read only from
+     * {@code _sw_mileage_portfolio_github_repo_cache} (paginated in memory unless
+     * {@code visible_only=true},
+     * in which case {@code page} / {@code per_page} are ignored and all visible
+     * portfolio repos are returned).
+     * Run POST …/github-cache/refresh to populate. Optional {@code search} filters
+     * cached rows
+     * (repo name, owner, URL, description, language, repo id, custom title /
+     * description on linked portfolio
+     * entries) before sort and pagination (or before returning the full
+     * visible-only list).
+     * This endpoint does not accept GitHub’s {@code affiliation} query (it is not
+     * stored per cache
+     * row). Separately, note that GitHub’s {@code affiliation} on
+     * {@code GET /user/repos} classifies each repo
+     * by relationship (owner / collaborator / organization member) for that
+     * <em>listing</em> API—it does not mean
+     * “every repository I have committed to.” PATCH a repo to pull fresh GitHub
+     * detail into the cache for that row.
      */
     public RepositoriesResponse getRepositories(
             Users user,
@@ -358,8 +381,8 @@ public class PortfolioService {
         }
 
         Portfolio portfolio = getOrCreatePortfolio(user);
-        java.util.List<PortfolioRepoEntry> entries =
-                portfolioRepoEntryRepository.findByPortfolio_IdOrderByDisplayOrderAsc(portfolio.getId());
+        java.util.List<PortfolioRepoEntry> entries = portfolioRepoEntryRepository
+                .findByPortfolio_IdOrderByDisplayOrderAsc(portfolio.getId());
 
         // Map of selected repos: GitHub repo_id -> PortfolioRepoEntry (custom settings)
         Map<Long, PortfolioRepoEntry> byRepoId = new HashMap<>();
@@ -373,17 +396,19 @@ public class PortfolioService {
             githubUsername = profile.getGithubUsername();
         }
 
-        String sortParam = (sort != null && sort.matches("created|updated|pushed|full_name|owner_login")) ? sort : "updated";
+        String sortParam = (sort != null && sort.matches("created|updated|pushed|full_name|owner_login")) ? sort
+                : "updated";
         String visibilityParam = (visibility != null && visibility.matches("all|public|private")) ? visibility : "all";
 
         java.util.List<RepoEntryResponse> list = new java.util.ArrayList<>();
-        // Total matches for the FE pagination/counter (after owner/visibility/search filters,
+        // Total matches for the FE pagination/counter (after owner/visibility/search
+        // filters,
         // before page slicing and the post-mapping selected_only/visible_only filter).
         int totalMatching = 0;
 
         if (githubUsername != null && !githubUsername.isEmpty()) {
-            List<PortfolioGithubRepoCache> cached =
-                    portfolioGithubRepoCacheRepository.findByPortfolio_Id(portfolio.getId());
+            List<PortfolioGithubRepoCache> cached = portfolioGithubRepoCacheRepository
+                    .findByPortfolio_Id(portfolio.getId());
             List<PortfolioGithubRepoCache> filtered = new ArrayList<>(cached);
             if (owner != null && !owner.trim().isEmpty()) {
                 String ownerLogin = owner.trim();
@@ -418,7 +443,8 @@ public class PortfolioService {
                         c -> (c.getOwnerLogin() != null ? c.getOwnerLogin() : "") + "/"
                                 + (c.getName() != null ? c.getName() : ""));
             } else {
-                // updated, pushed — use stored github_updated_at (nulls last, newest first by ISO-8601 string)
+                // updated, pushed — use stored github_updated_at (nulls last, newest first by
+                // ISO-8601 string)
                 cmp = Comparator.comparing(
                         PortfolioGithubRepoCache::getGithubUpdatedAt,
                         Comparator.nullsLast(Comparator.reverseOrder()));
@@ -466,6 +492,9 @@ public class PortfolioService {
                         .owner(c.getOwnerLogin())
                         .stargazers_count(c.getStargazersCount())
                         .forks_count(c.getForksCount())
+                        .team_composition(selected != null ? selected.getTeamComposition() : null)
+                        .my_role(buildMyRoleDto(selected))
+                        .key_contributions(selected != null ? selected.getKeyContributions() : null)
                         .build());
             }
         } else {
@@ -484,11 +513,15 @@ public class PortfolioService {
                         .github_description(null)
                         .is_visible(e.getIsVisible())
                         .display_order(e.getDisplayOrder())
+                        .team_composition(e.getTeamComposition())
+                        .my_role(buildMyRoleDto(e))
+                        .key_contributions(e.getKeyContributions())
                         .build());
             }
         }
 
-        // Optional filters: selected_only (id != null) or visible_only (id != null && is_visible)
+        // Optional filters: selected_only (id != null) or visible_only (id != null &&
+        // is_visible)
         if (Boolean.TRUE.equals(visibleOnly)) {
             list.removeIf(r -> r.getId() == null || !Boolean.TRUE.equals(r.getIs_visible()));
         } else if (Boolean.TRUE.equals(selectedOnly)) {
@@ -505,7 +538,10 @@ public class PortfolioService {
         return haystack != null && haystack.toLowerCase(Locale.ROOT).contains(needleLower);
     }
 
-    /** Each whitespace-separated token must match at least one searchable field (AND). */
+    /**
+     * Each whitespace-separated token must match at least one searchable field
+     * (AND).
+     */
     private static boolean matchesGithubRepoSearch(
             String searchTrimmed, PortfolioGithubRepoCache c, PortfolioRepoEntry selected) {
         String lowered = searchTrimmed.toLowerCase(Locale.ROOT);
@@ -557,10 +593,9 @@ public class PortfolioService {
             if (part.isEmpty()) {
                 continue;
             }
-            boolean hit =
-                    searchFieldContains(e.getCustomTitle(), part)
-                            || searchFieldContains(e.getDescription(), part)
-                            || searchFieldContains(String.valueOf(e.getRepoId()), part);
+            boolean hit = searchFieldContains(e.getCustomTitle(), part)
+                    || searchFieldContains(e.getDescription(), part)
+                    || searchFieldContains(String.valueOf(e.getRepoId()), part);
             if (!hit) {
                 return false;
             }
@@ -569,9 +604,12 @@ public class PortfolioService {
     }
 
     /**
-     * Fetches one page from GitHub’s list APIs. With a token: {@code GET /user/repos} including
-     * {@code affiliation} (see caller; refresh includes {@code organization_member}).
-     * Without a token: {@code GET /users/{username}/repos?type=owner} (public owner repos only).
+     * Fetches one page from GitHub’s list APIs. With a token:
+     * {@code GET /user/repos} including
+     * {@code affiliation} (see caller; refresh includes
+     * {@code organization_member}).
+     * Without a token: {@code GET /users/{username}/repos?type=owner} (public owner
+     * repos only).
      */
     private Map[] fetchGithubReposPage(
             String githubUsername,
@@ -610,14 +648,19 @@ public class PortfolioService {
     }
 
     /**
-     * Cache refresh: GitHub list API only (no per-repo {@code /languages}). Upserts list fields:
-     * name, url, primary language, dates, visibility, owner, stars, forks. Does not clear existing
+     * Cache refresh: GitHub list API only (no per-repo {@code /languages}). Upserts
+     * list fields:
+     * name, url, primary language, dates, visibility, owner, stars, forks. Does not
+     * clear existing
      * {@code languages_json} on rows already enriched via PUT/PATCH.
      * <p>
-     * When calling GitHub with an OAuth token, {@code affiliation=owner,collaborator,organization_member} lists
-     * repos you own, are a collaborator on, or can see via org membership (may be larger).
+     * When calling GitHub with an OAuth token,
+     * {@code affiliation=owner,collaborator,organization_member} lists
+     * repos you own, are a collaborator on, or can see via org membership (may be
+     * larger).
      * <p>
-     * Full language breakdown is written on {@code PUT/PATCH /portfolio/repositories} for selected repos.
+     * Full language breakdown is written on
+     * {@code PUT/PATCH /portfolio/repositories} for selected repos.
      */
     public GithubRepoCacheSyncResult refreshGithubRepositoriesCache(Users user) {
         Portfolio portfolio = getOrCreatePortfolio(user);
@@ -629,8 +672,7 @@ public class PortfolioService {
             return GithubRepoCacheSyncResult.builder().reposSynced(0).warnings(warnings).build();
         }
         String githubToken = null;
-        boolean hasEncryptedToken =
-                profile.getGithubAccessToken() != null && !profile.getGithubAccessToken().isEmpty();
+        boolean hasEncryptedToken = profile.getGithubAccessToken() != null && !profile.getGithubAccessToken().isEmpty();
         if (tokenEncryptionKey == null || tokenEncryptionKey.isEmpty()) {
             if (hasEncryptedToken) {
                 warnings.add(
@@ -685,7 +727,8 @@ public class PortfolioService {
     }
 
     /**
-     * Upserts one row in {@code _sw_mileage_portfolio_github_repo_cache} from a GitHub REST "repository" JSON object.
+     * Upserts one row in {@code _sw_mileage_portfolio_github_repo_cache} from a
+     * GitHub REST "repository" JSON object.
      */
     @SuppressWarnings("unchecked")
     private void upsertOneCachedRepoFromGithubMap(Portfolio portfolio, Map<?, ?> repo, LocalDateTime now) {
@@ -719,8 +762,8 @@ public class PortfolioService {
         if (ownerObj instanceof Map) {
             ownerLogin = (String) ((Map<?, ?>) ownerObj).get("login");
         }
-        Optional<PortfolioGithubRepoCache> existingOpt =
-                portfolioGithubRepoCacheRepository.findByPortfolio_IdAndRepoId(portfolio.getId(), repoId);
+        Optional<PortfolioGithubRepoCache> existingOpt = portfolioGithubRepoCacheRepository
+                .findByPortfolio_IdAndRepoId(portfolio.getId(), repoId);
         PortfolioGithubRepoCache row = existingOpt.orElseGet(() -> PortfolioGithubRepoCache.builder()
                 .portfolio(portfolio)
                 .repoId(repoId)
@@ -743,7 +786,8 @@ public class PortfolioService {
     }
 
     /**
-     * Optional GET /user to surface auth/scope issues without failing the whole refresh.
+     * Optional GET /user to surface auth/scope issues without failing the whole
+     * refresh.
      */
     private void addGithubTokenProbeWarnings(String githubToken, List<String> warnings) {
         try {
@@ -755,7 +799,8 @@ public class PortfolioService {
                     githubApiBaseUrl + "/user",
                     HttpMethod.GET,
                     req,
-                    new ParameterizedTypeReference<Map<String, Object>>() {});
+                    new ParameterizedTypeReference<Map<String, Object>>() {
+                    });
             String scopes = response.getHeaders().getFirst("X-OAuth-Scopes");
             if (scopes != null && !scopes.trim().isEmpty() && !scopes.contains("repo")) {
                 warnings.add(
@@ -784,7 +829,8 @@ public class PortfolioService {
     }
 
     /**
-     * GET /repositories/{id} + /languages — full cache row for one repo (used when saving to portfolio).
+     * GET /repositories/{id} + /languages — full cache row for one repo (used when
+     * saving to portfolio).
      */
     private void enrichGithubRepoCacheForPortfolioRepo(Portfolio portfolio, Users user, long repoId) {
         String githubToken = resolveGithubToken(user);
@@ -876,7 +922,68 @@ public class PortfolioService {
         PortfolioRepoEntry entry = portfolioRepoEntryRepository
                 .findByIdAndPortfolio_Id(id, portfolio.getId())
                 .orElseThrow(() -> new DoNotExistException("해당 레포를 찾을 수 없습니다."));
-        return applyRepositoryPatchAndEnrich(portfolio, entry, request != null ? request : new RepoPatchRequest(), user);
+        return applyRepositoryPatchAndEnrich(portfolio, entry, request != null ? request : new RepoPatchRequest(),
+                user);
+    }
+
+    /**
+     * Apply the contribution-related fields (team_composition / my_role /
+     * key_contributions) from a PATCH.
+     * Each field is independent: {@code null} means "leave unchanged"; sending the
+     * field replaces the value
+     * (use {@code []} to clear team_composition, empty string to clear
+     * key_contributions, or a {@link MyRoleDto}
+     * with both fields {@code null} to clear my_role). Numeric range checks happen
+     * here as a safety net in
+     * addition to bean validation on the DTO.
+     */
+    private void applyContributionPatch(PortfolioRepoEntry entry, RepoPatchRequest request) {
+        if (request.getTeam_composition() != null) {
+            List<TeamRoleDto> incoming = request.getTeam_composition();
+            for (TeamRoleDto t : incoming) {
+                if (t == null)
+                    continue;
+                if (t.getRole() == null || t.getRole().trim().isEmpty()) {
+                    throw new IllegalArgumentException("team_composition.role must not be blank");
+                }
+                if (t.getCount() == null || t.getCount() < 0) {
+                    throw new IllegalArgumentException("team_composition.count must be >= 0");
+                }
+            }
+            entry.setTeamComposition(new ArrayList<>(incoming));
+        }
+        if (request.getMy_role() != null) {
+            MyRoleDto mr = request.getMy_role();
+            if (mr.getContribution_percent() != null
+                    && (mr.getContribution_percent() < 0 || mr.getContribution_percent() > 100)) {
+                throw new IllegalArgumentException("my_role.contribution_percent must be between 0 and 100");
+            }
+            entry.setMyRoleRole(mr.getRole());
+            entry.setMyRoleContributionPercent(mr.getContribution_percent());
+        }
+        if (request.getKey_contributions() != null) {
+            String kc = request.getKey_contributions();
+            if (kc.length() > 2000) {
+                throw new IllegalArgumentException("key_contributions must be at most 2000 characters");
+            }
+            entry.setKeyContributions(kc);
+        }
+    }
+
+    /**
+     * Build the {@link MyRoleDto} from entity fields, or {@code null} when neither
+     * is set.
+     */
+    private MyRoleDto buildMyRoleDto(PortfolioRepoEntry entry) {
+        if (entry == null)
+            return null;
+        if (entry.getMyRoleRole() == null && entry.getMyRoleContributionPercent() == null) {
+            return null;
+        }
+        return MyRoleDto.builder()
+                .role(entry.getMyRoleRole())
+                .contribution_percent(entry.getMyRoleContributionPercent())
+                .build();
     }
 
     private RepoEntryResponse applyRepositoryPatchAndEnrich(
@@ -893,6 +1000,7 @@ public class PortfolioService {
         if (request.getDisplay_order() != null) {
             entry.setDisplayOrder(request.getDisplay_order());
         }
+        applyContributionPatch(entry, request);
         portfolioRepoEntryRepository.save(entry);
 
         String name = null;
@@ -949,7 +1057,8 @@ public class PortfolioService {
         }
 
         if (repo != null) {
-            upsertGithubRepoCacheFull(portfolio, entry.getRepoId(), name, htmlUrl, githubDescription, language, languages,
+            upsertGithubRepoCacheFull(portfolio, entry.getRepoId(), name, htmlUrl, githubDescription, language,
+                    languages,
                     createdAt, updatedAt, visibility, ownerLogin, stargazersCount, forksCount);
         }
 
@@ -969,6 +1078,9 @@ public class PortfolioService {
                 .github_description(githubForApi)
                 .is_visible(entry.getIsVisible())
                 .display_order(entry.getDisplayOrder())
+                .team_composition(entry.getTeamComposition())
+                .my_role(buildMyRoleDto(entry))
+                .key_contributions(entry.getKeyContributions())
                 .github_title(name)
                 .html_url(htmlUrl)
                 .language(language)
@@ -1005,7 +1117,8 @@ public class PortfolioService {
                 if (r == null || r.getRepo_id() == null) {
                     continue;
                 }
-                // Treat PUT payload as "selected repos". If the UI sends the full cache list with toggles,
+                // Treat PUT payload as "selected repos". If the UI sends the full cache list
+                // with toggles,
                 // only repos with is_visible=true should be persisted as portfolio selections.
                 boolean selected = r.getIs_visible() == null || Boolean.TRUE.equals(r.getIs_visible());
                 if (selected) {
@@ -1013,7 +1126,8 @@ public class PortfolioService {
                 }
             }
         }
-        List<PortfolioRepoEntry> existing = portfolioRepoEntryRepository.findByPortfolio_IdOrderByDisplayOrderAsc(portfolio.getId());
+        List<PortfolioRepoEntry> existing = portfolioRepoEntryRepository
+                .findByPortfolio_IdOrderByDisplayOrderAsc(portfolio.getId());
         for (PortfolioRepoEntry e : existing) {
             if (!requestedRepoIds.contains(e.getRepoId())) {
                 portfolioRepoEntryRepository.delete(e);
@@ -1032,7 +1146,8 @@ public class PortfolioService {
                     continue;
                 }
 
-                // Contribution gate (best-effort). If we can confidently say "not contributed", skip.
+                // Contribution gate (best-effort). If we can confidently say "not contributed",
+                // skip.
                 if (githubUsername != null && !githubUsername.isEmpty()) {
                     Boolean contributed = hasUserAuthoredAnyCommit(
                             portfolio, r.getRepo_id(), githubUsername, githubToken);
@@ -1047,8 +1162,8 @@ public class PortfolioService {
                     }
                 }
 
-                Optional<PortfolioRepoEntry> opt =
-                        portfolioRepoEntryRepository.findByPortfolio_IdAndRepoId(portfolio.getId(), r.getRepo_id());
+                Optional<PortfolioRepoEntry> opt = portfolioRepoEntryRepository
+                        .findByPortfolio_IdAndRepoId(portfolio.getId(), r.getRepo_id());
                 PortfolioRepoEntry e = opt.orElseGet(() -> PortfolioRepoEntry.builder()
                         .portfolio(portfolio)
                         .repoId(r.getRepo_id())
@@ -1074,7 +1189,8 @@ public class PortfolioService {
                 if (!selected) {
                     continue;
                 }
-                if (portfolioRepoEntryRepository.findByPortfolio_IdAndRepoId(portfolio.getId(), r.getRepo_id()).isPresent()) {
+                if (portfolioRepoEntryRepository.findByPortfolio_IdAndRepoId(portfolio.getId(), r.getRepo_id())
+                        .isPresent()) {
                     enrichGithubRepoCacheForPortfolioRepo(portfolio, user, r.getRepo_id());
                 }
             }
@@ -1088,7 +1204,8 @@ public class PortfolioService {
     /**
      * Returns true if the user has at least one authored commit on the repo.
      * Returns false if confirmed no commits are found (within limits).
-     * Returns null when the check cannot be performed reliably (missing cache info/token, API error).
+     * Returns null when the check cannot be performed reliably (missing cache
+     * info/token, API error).
      */
     @SuppressWarnings("rawtypes")
     private Boolean hasUserAuthoredAnyCommit(
@@ -1103,7 +1220,8 @@ public class PortfolioService {
             return null;
         }
         if (githubToken == null || githubToken.isEmpty()) {
-            // Without token this will fail for private repos and may rate-limit quickly; treat as "unknown".
+            // Without token this will fail for private repos and may rate-limit quickly;
+            // treat as "unknown".
             return null;
         }
 
@@ -1145,12 +1263,14 @@ public class PortfolioService {
     }
 
     /**
-     * GET /api/portfolio/activities – 활동 목록. Optional filter: ?category=1&category=2 (default: full list).
+     * GET /api/portfolio/activities – 활동 목록. Optional filter:
+     * ?category=1&category=2 (default: full list).
      */
     public ActivitiesResponse getActivities(Users user, java.util.List<String> categories) {
         Portfolio portfolio = getOrCreatePortfolio(user);
         java.util.List<PortfolioActivity> list = (categories != null && !categories.isEmpty())
-                ? portfolioActivityRepository.findByPortfolio_IdAndCategoryInOrderByCategoryAscDisplayOrderAsc(portfolio.getId(), categories)
+                ? portfolioActivityRepository
+                        .findByPortfolio_IdAndCategoryInOrderByCategoryAscDisplayOrderAsc(portfolio.getId(), categories)
                 : portfolioActivityRepository.findByPortfolio_IdOrderByCategoryAscDisplayOrderAsc(portfolio.getId());
         java.util.List<ActivityResponse> responses = new java.util.ArrayList<>();
         for (PortfolioActivity a : list) {
@@ -1164,7 +1284,8 @@ public class PortfolioService {
      */
     public ActivityResponse createActivity(Users user, ActivityRequest request) {
         Portfolio portfolio = getOrCreatePortfolio(user);
-        int nextOrder = portfolioActivityRepository.findByPortfolio_IdOrderByCategoryAscDisplayOrderAsc(portfolio.getId()).size();
+        int nextOrder = portfolioActivityRepository
+                .findByPortfolio_IdOrderByCategoryAscDisplayOrderAsc(portfolio.getId()).size();
         PortfolioActivity activity = PortfolioActivity.builder()
                 .portfolio(portfolio)
                 .title(request.getTitle())
@@ -1231,7 +1352,8 @@ public class PortfolioService {
     }
 
     /**
-     * PATCH /api/portfolio/activities – 전체 목록 일부 수정 (각 항목은 id로 식별, null이 아닌 필드만 반영).
+     * PATCH /api/portfolio/activities – 전체 목록 일부 수정 (각 항목은 id로 식별, null이 아닌 필드만
+     * 반영).
      */
     public ActivitiesResponse patchActivities(Users user, java.util.List<ActivityPatchItemRequest> request) {
         if (request == null || request.isEmpty()) {
@@ -1239,16 +1361,26 @@ public class PortfolioService {
         }
         Portfolio portfolio = getOrCreatePortfolio(user);
         for (ActivityPatchItemRequest item : request) {
-            if (item == null || item.getId() == null) continue;
-            PortfolioActivity activity = portfolioActivityRepository.findByIdAndPortfolio_Id(item.getId(), portfolio.getId()).orElse(null);
-            if (activity == null) continue;
-            if (item.getTitle() != null) activity.setTitle(item.getTitle());
-            if (item.getDescription() != null) activity.setDescription(item.getDescription());
-            if (item.getStart_date() != null) activity.setStartDate(item.getStart_date());
-            if (item.getEnd_date() != null) activity.setEndDate(item.getEnd_date());
-            if (item.getCategory() != null) activity.setCategory(item.getCategory());
-            if (item.getUrl() != null) activity.setUrl(normalizeActivityUrl(item.getUrl()));
-            if (item.getTags() != null) activity.setTags(normalizeActivityTags(item.getTags()));
+            if (item == null || item.getId() == null)
+                continue;
+            PortfolioActivity activity = portfolioActivityRepository
+                    .findByIdAndPortfolio_Id(item.getId(), portfolio.getId()).orElse(null);
+            if (activity == null)
+                continue;
+            if (item.getTitle() != null)
+                activity.setTitle(item.getTitle());
+            if (item.getDescription() != null)
+                activity.setDescription(item.getDescription());
+            if (item.getStart_date() != null)
+                activity.setStartDate(item.getStart_date());
+            if (item.getEnd_date() != null)
+                activity.setEndDate(item.getEnd_date());
+            if (item.getCategory() != null)
+                activity.setCategory(item.getCategory());
+            if (item.getUrl() != null)
+                activity.setUrl(normalizeActivityUrl(item.getUrl()));
+            if (item.getTags() != null)
+                activity.setTags(normalizeActivityTags(item.getTags()));
             portfolioActivityRepository.save(activity);
         }
         return getActivities(user, null);
@@ -1310,12 +1442,13 @@ public class PortfolioService {
      */
     public MileageListResponse putMileageList(Users user, java.util.List<MileageEntryRequest> request) {
         Portfolio portfolio = getOrCreatePortfolio(user);
-        
+
         // Validate request: check for duplicates and existence
         if (request != null && !request.isEmpty()) {
             java.util.Set<Long> seenIds = new java.util.HashSet<>();
             for (MileageEntryRequest req : request) {
-                if (req == null || req.getMileage_id() == null) continue;
+                if (req == null || req.getMileage_id() == null)
+                    continue;
                 // Check for duplicates in request
                 if (seenIds.contains(req.getMileage_id())) {
                     throw new IllegalArgumentException("중복된 mileage_id가 있습니다: " + req.getMileage_id());
@@ -1327,8 +1460,9 @@ public class PortfolioService {
                 }
             }
         }
-        
-        java.util.List<PortfolioMileageEntry> current = portfolioMileageEntryRepository.findByPortfolio_IdOrderByDisplayOrderAsc(portfolio.getId());
+
+        java.util.List<PortfolioMileageEntry> current = portfolioMileageEntryRepository
+                .findByPortfolio_IdOrderByDisplayOrderAsc(portfolio.getId());
         // 기존 연결 해제 시 원본 레코드의 is_linked_to_portfolio 플래그 해제
         for (PortfolioMileageEntry e : current) {
             etcSubitemRepository.findById(e.getMileageId().intValue())
@@ -1343,7 +1477,8 @@ public class PortfolioService {
         if (request != null) {
             int order = 0;
             for (MileageEntryRequest req : request) {
-                if (req == null || req.getMileage_id() == null) continue;
+                if (req == null || req.getMileage_id() == null)
+                    continue;
                 PortfolioMileageEntry entry = PortfolioMileageEntry.builder()
                         .portfolio(portfolio)
                         .mileageId(req.getMileage_id())
@@ -1366,7 +1501,8 @@ public class PortfolioService {
      */
     public MileageListResponse getMileageList(Users user) {
         Portfolio portfolio = getOrCreatePortfolio(user);
-        java.util.List<PortfolioMileageEntry> list = portfolioMileageEntryRepository.findByPortfolio_IdOrderByDisplayOrderAsc(portfolio.getId());
+        java.util.List<PortfolioMileageEntry> list = portfolioMileageEntryRepository
+                .findByPortfolio_IdOrderByDisplayOrderAsc(portfolio.getId());
         java.util.List<MileageEntryResponse> responses = new java.util.ArrayList<>();
         for (PortfolioMileageEntry e : list) {
             responses.add(toMileageEntryResponse(e));
@@ -1379,10 +1515,12 @@ public class PortfolioService {
      */
     public MileageEntryResponse linkMileage(Users user, MileageLinkRequest request) {
         Portfolio portfolio = getOrCreatePortfolio(user);
-        if (portfolioMileageEntryRepository.existsByPortfolio_IdAndMileageId(portfolio.getId(), request.getMileage_id())) {
+        if (portfolioMileageEntryRepository.existsByPortfolio_IdAndMileageId(portfolio.getId(),
+                request.getMileage_id())) {
             throw new IllegalArgumentException("이미 연결된 마일리지입니다.");
         }
-        int nextOrder = portfolioMileageEntryRepository.findByPortfolio_IdOrderByDisplayOrderAsc(portfolio.getId()).size();
+        int nextOrder = portfolioMileageEntryRepository.findByPortfolio_IdOrderByDisplayOrderAsc(portfolio.getId())
+                .size();
         PortfolioMileageEntry entry = PortfolioMileageEntry.builder()
                 .portfolio(portfolio)
                 .mileageId(request.getMileage_id())
@@ -1402,7 +1540,8 @@ public class PortfolioService {
     }
 
     /**
-     * PUT /api/portfolio/mileage/{id} – 추가 설명(additional_info)만 수정 (id = portfolio_mileage link id).
+     * PUT /api/portfolio/mileage/{id} – 추가 설명(additional_info)만 수정 (id =
+     * portfolio_mileage link id).
      */
     public MileageEntryResponse updateMileageEntry(Users user, Long id, String additionalInfo) {
         Portfolio portfolio = getOrCreatePortfolio(user);
@@ -1457,8 +1596,8 @@ public class PortfolioService {
         return builder.build();
     }
 
-    private static final java.util.List<String> DEFAULT_SECTION_ORDER =
-            java.util.Arrays.asList("tech", "repo", "activities", "certificates", "mileage");
+    private static final java.util.List<String> DEFAULT_SECTION_ORDER = java.util.Arrays.asList("tech", "repo",
+            "activities", "certificates", "mileage");
 
     /**
      * GET /api/portfolio/settings – 섹션 순서 (유저 정보는 프론트에서 상단 고정).
@@ -1477,7 +1616,8 @@ public class PortfolioService {
      */
     public SettingsResponse putSettings(Users user, java.util.List<String> sectionOrder) {
         Portfolio portfolio = getOrCreatePortfolio(user);
-        portfolio.setSectionOrder(sectionOrder != null && !sectionOrder.isEmpty() ? sectionOrder : DEFAULT_SECTION_ORDER);
+        portfolio.setSectionOrder(
+                sectionOrder != null && !sectionOrder.isEmpty() ? sectionOrder : DEFAULT_SECTION_ORDER);
         portfolioRepository.save(portfolio);
         return getSettings(user);
     }
