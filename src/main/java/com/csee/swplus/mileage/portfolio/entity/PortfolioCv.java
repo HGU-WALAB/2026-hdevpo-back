@@ -9,6 +9,7 @@ import lombok.*;
 
 import javax.persistence.*;
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * User-created CV/Resume with job info, prompt, and LLM-generated HTML.
@@ -80,6 +81,18 @@ public class PortfolioCv extends BaseTime {
 
     @Column(name = "html_content", columnDefinition = "LONGTEXT")
     private String htmlContent;
+
+    /** OpenAI model used for the most recent {@code generate-html} call. {@code null} if never generated. */
+    @Column(name = "model_used", length = 64)
+    private String modelUsed;
+
+    /** Total tokens (prompt + completion) consumed by the most recent {@code generate-html} call. {@code null} if never generated. */
+    @Column(name = "tokens_used")
+    private Integer tokensUsed;
+
+    /** Timestamp of the most recent successful {@code generate-html} call. */
+    @Column(name = "last_generated_at")
+    private LocalDateTime lastGeneratedAt;
 
     /** Numeric id for public URL (8–12 digits); unique when set. */
     @Column(name = "public_token", length = 12, unique = true)
