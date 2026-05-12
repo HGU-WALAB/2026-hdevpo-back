@@ -1,6 +1,9 @@
 package com.csee.swplus.mileage.portfolio.entity;
 
 import com.csee.swplus.mileage.base.entity.BaseTime;
+import com.csee.swplus.mileage.portfolio.converter.DesignPreferencesJsonConverter;
+import com.csee.swplus.mileage.portfolio.converter.LongListJsonConverter;
+import com.csee.swplus.mileage.portfolio.dto.DesignPreferencesDto;
 import com.csee.swplus.mileage.user.entity.Users;
 import lombok.*;
 
@@ -39,6 +42,33 @@ public class PortfolioCv extends BaseTime {
 
     @Column(name = "additional_notes", columnDefinition = "TEXT")
     private String additionalNotes;
+
+    /**
+     * User design choices for the CV prompt step 2 ({@code [design_preferences]} block).
+     * JSON-encoded in {@code design_preferences TEXT}; {@code null} when the user did not choose anything.
+     */
+    @Convert(converter = DesignPreferencesJsonConverter.class)
+    @Column(name = "design_preferences", columnDefinition = "TEXT")
+    private DesignPreferencesDto designPreferences;
+
+    /**
+     * Selected portfolio repo IDs at build time. Persisted so {@code POST /cv/{id}/regenerate-prompt}
+     * can rebuild the prompt without the FE re-sending selections.
+     * {@code null} for legacy CVs created before this column existed.
+     */
+    @Convert(converter = LongListJsonConverter.class)
+    @Column(name = "selected_repo_ids", columnDefinition = "TEXT")
+    private List<Long> selectedRepoIds;
+
+    /** Selected mileage link IDs at build time. {@code null} for legacy CVs. */
+    @Convert(converter = LongListJsonConverter.class)
+    @Column(name = "selected_mileage_ids", columnDefinition = "TEXT")
+    private List<Long> selectedMileageIds;
+
+    /** Selected activity IDs at build time. {@code null} for legacy CVs. */
+    @Convert(converter = LongListJsonConverter.class)
+    @Column(name = "selected_activity_ids", columnDefinition = "TEXT")
+    private List<Long> selectedActivityIds;
 
     /** Stored as {@code cv} or {@code archive} (see {@code CvPromptMode}). */
     @Column(name = "mode", nullable = false, length = 16)

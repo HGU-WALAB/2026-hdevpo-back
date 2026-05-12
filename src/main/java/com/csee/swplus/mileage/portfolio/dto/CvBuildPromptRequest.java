@@ -5,6 +5,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import javax.validation.Valid;
 import java.util.Collections;
 import java.util.List;
 
@@ -49,4 +50,11 @@ public class CvBuildPromptRequest {
 
     /** Selected repo entry IDs (portfolio_repos id). */
     private List<Long> selected_repo_ids = Collections.emptyList();
+
+    /**
+     * Optional user design preferences rendered into STEP 2 of the prompt under {@code [design_preferences]}.
+     * Pass {@code null} (or an object with all blank fields) to omit the block entirely.
+     */
+    @Valid
+    private DesignPreferencesDto design_preferences;
 }
