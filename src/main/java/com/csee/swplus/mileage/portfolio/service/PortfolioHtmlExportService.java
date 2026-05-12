@@ -29,7 +29,11 @@ import java.util.stream.Collectors;
  * Exports portfolio data as a single-file HTML page (recruiter-optimized, print-friendly).
  * **blueStyle** layout: sidebar (name, role, school, meta-line, summary-chip, tech pills, contact) +
  * main (About, Projects, Mileage & extracurricular timeline, optional Achievements, Activities, footer).
- * LLM prompts ({@link #buildCvPromptTail()}, {@link #buildArchivePromptTail()}) require the same structure/class names for generated HTML.
+ *
+ * <p>LLM prompts ({@link #buildCvPromptTail()}, {@link #buildArchivePromptTail()}) embed {@link #CSS} as the
+ * **default fallback style** (used when no {@code [design_preferences]} block is provided in STEP 2 — i.e. the
+ * legacy blueStyle look is preserved). When {@code [design_preferences]} is provided, the LLM picks layout /
+ * color theme / density dynamically per STEP 4 and is allowed to write its own CSS per STEP 5-B.
  */
 @Service
 @RequiredArgsConstructor
@@ -278,6 +282,8 @@ public class PortfolioHtmlExportService {
         sb.append("- GitHub URL: ").append(githubUrl != null ? githubUrl : "").append("\n");
         sb.append("- Email: ").append(email != null ? email : "").append("\n");
 
+        appendDesignPreferencesBlock(sb, request.getDesign_preferences());
+
         return PROMPT_HEAD + sb.toString() + buildCvPromptTail();
     }
 
@@ -412,6 +418,8 @@ public class PortfolioHtmlExportService {
         sb.append("- GitHub URL: ").append(githubUrl != null ? githubUrl : "").append("\n");
         sb.append("- Email: ").append(email != null ? email : "").append("\n");
 
+        appendDesignPreferencesBlock(sb, request.getDesign_preferences());
+
         return ARCHIVE_PROMPT_HEAD + sb.toString() + buildArchivePromptTail();
     }
 
@@ -424,6 +432,47 @@ public class PortfolioHtmlExportService {
 
     private String nullToEmpty(Object o) {
         return o == null ? "" : String.valueOf(o);
+    }
+
+    /**
+     * Render the {@code [design_preferences]} block into STEP 2. Each line is omitted when its sub-field is blank.
+     * The whole block (incl. header) is omitted when no sub-field is provided.
+     */
+    private void appendDesignPreferencesBlock(StringBuilder sb, DesignPreferencesDto prefs) {
+        if (prefs == null) {
+            return;
+        }
+        String layout = trimToNull(prefs.getLayout());
+        String color = trimToNull(prefs.getColor_theme());
+        String density = trimToNull(prefs.getDensity());
+        String notes = prefs.getAdditional_notes() != null ? prefs.getAdditional_notes().trim() : null;
+        if (notes != null && notes.isEmpty()) {
+            notes = null;
+        }
+        if (layout == null && color == null && density == null && notes == null) {
+            return;
+        }
+        sb.append("\n[design_preferences]\n");
+        if (layout != null) {
+            sb.append("- 레이아웃: ").append(layout).append("\n");
+        }
+        if (color != null) {
+            sb.append("- 색상 테마: ").append(color).append("\n");
+        }
+        if (density != null) {
+            sb.append("- 밀도: ").append(density).append("\n");
+        }
+        if (notes != null) {
+            sb.append("- 추가 요청사항: ").append(notes).append("\n");
+        }
+    }
+
+    private static String trimToNull(String s) {
+        if (s == null) {
+            return null;
+        }
+        String t = s.trim();
+        return t.isEmpty() ? null : t;
     }
 
     private void appendProfileLinksLines(StringBuilder sb, UserInfoResponse userInfo) {
@@ -1238,26 +1287,20 @@ public class PortfolioHtmlExportService {
             + "You are an expert career coach and frontend developer specializing in creating recruiter-optimized portfolio websites for entry-level CS students in Korea. You have reviewed 10,000+ CS student resumes and know exactly what hiring managers look for in the first 30 seconds.\n\n"
             + "---\n\n"
             + "# TASK\n"
-            + "Generate a single-file HTML portfolio for a CS student based strictly on the input data provided. The design should follow a classic resume/portfolio style — clean, professional, easy to print, and readable in Korean.\n\n"
+            + "Generate a single-file HTML portfolio for a CS student based strictly on the input data provided.\n\n"
+            + "The design direction, color palette, typography style, spacing system, layout structure, and visual style are NOT predetermined. You must decide them dynamically based on:\n"
+            + "- the user's `[design_preferences]` block in STEP 2 (when provided)\n"
+            + "- the applicant's target role\n"
+            + "- project characteristics\n"
+            + "- professionalism required for Korean hiring culture\n"
+            + "- readability\n"
+            + "- recruiter usability\n"
+            + "- print friendliness\n\n"
+            + "If the `[design_preferences]` block is missing or empty, fall back to the **default blue style** described in STEP 5-A (verbatim CSS + body skeleton).\n\n"
+            + "The final output must remain: clean, professional, recruiter-friendly, easy to scan, responsive, printable, and readable in Korean.\n\n"
             + "---\n\n"
-            + "# STEP 1: INTAKE & CLARIFICATION (Do this BEFORE generating anything)\n\n"
-            + "When the user provides their data, you must:\n\n"
-            + "1. Summarize what you received in a short structured list:\n"
-            + "   - 확인된 정보: (list what you have)\n"
-            + "   - ❓ 부족하거나 불명확한 정보: (list what's missing or unclear)\n\n"
-            + "2. Ask focused follow-up questions — maximum 5 questions, only about missing info that would meaningfully impact the portfolio. Group them clearly. Do NOT ask about things already provided.\n\n"
-            + "3. Show a text preview of the portfolio structure before generating HTML:\n"
-            + "```\n"
-            + "📋 생성 예정 포트폴리오 구조:\n"
-            + "- Header: [이름] · [지망 직무]\n"
-            + "- About Me: [2-3줄 미리보기]\n"
-            + "- Tech Stack: [기술 나열]\n"
-            + "- Projects: [프로젝트명 1, 2, 3]\n"
-            + "- Activities: [활동 요약]\n"
-            + "- Contact: [이메일, GitHub]\n"
-            + "```\n"
-            + "   Then ask: \"이 구조로 HTML을 생성할까요? 수정할 부분이 있으면 말씀해주세요.\"\n\n"
-            + "4. Only generate HTML after the user confirms.\n\n"
+            + "# STEP 1: ONE-SHOT\n"
+            + "Do **not** ask clarifying questions. Do **not** wait for confirmation. Do **not** simulate a chat. Read STEP 2 and output the HTML in this single response.\n\n"
             + "---\n\n"
             + "# STEP 2: INPUT DATA (User fills this in)\n\n"
             + "```\n";
@@ -1271,34 +1314,78 @@ public class PortfolioHtmlExportService {
                 + "1. GitHub repos + 산학 프로젝트 — Real artifacts, highest credibility\n"
                 + "2. 전공 교과/비교과 — Technical depth\n"
                 + "3. Activities + 대외 활동 — Collaboration, leadership\n"
-                + "4. Bio — Minimal, one short paragraph only\n\n"
+                + "4. Bio — Minimal, concise summary only\n\n"
                 + "## RULE 2: Zero Fabrication Policy\n"
-                + "- NEVER invent metrics, links, or project details not in the input\n"
-                + "- Empty fields → omit that section entirely, no placeholders\n"
-                + "- Do not infer technologies not explicitly mentioned\n\n"
+                + "- NEVER invent metrics, links, dates, awards, or project details not explicitly provided\n"
+                + "- Empty fields → omit section entirely (no placeholders)\n"
+                + "- Do not infer technologies not directly mentioned\n"
+                + "- Do not fabricate team size or contribution scope\n\n"
                 + "## RULE 3: Language Calibration\n"
-                + "| Raw Input | Rewritten As |\n"
+                + "| Raw Input | Rewrite Style |\n"
                 + "|---|---|\n"
                 + "| \"열심히 했다\" | \"[기술명]을 활용해 [기능] 구현\" |\n"
-                + "| \"팀장을 맡았다\" | \"팀 리드로서 [구체적 결과]\" |\n"
                 + "| \"공부했다\" | \"[기술명] 학습 및 적용\" |\n"
-                + "| \"Senior\", \"Lead\", \"전국 1위\" | 입력에 명시된 경우에만 그대로 사용 |\n\n"
-                + "## RULE 4: Honesty Modifiers\n"
-                + "- Always specify solo vs. team project (팀 N명 중 담당 파트)\n"
-                + "- Do not claim \"full-stack\" unless both frontend + backend evidence exist\n"
-                + "- Only list tech stack items demonstrated in actual projects or coursework\n\n"
-                + "## RULE 5: Achievements = Top Priority Visual\n"
-                + "- Any award or prize must appear prominently (badges or highlighted section)\n"
-                + "- Include prize tier if provided (대상, 최우수, 우수 등)\n\n"
+                + "| \"팀장을 맡았다\" | \"팀 리드로서 [담당 역할] 수행\" |\n"
+                + "| 모호한 표현 | 구체적인 기술 중심 표현으로 정리 |\n\n"
+                + "Use concise recruiter-oriented Korean writing.\n\n"
+                + "## RULE 4: Honesty & Scope Rules\n"
+                + "- Always distinguish: 개인 프로젝트 / 팀 프로젝트 / 담당 역할\n"
+                + "- Do not claim \"Full Stack\" unless both frontend and backend evidence exist\n"
+                + "- Only display tech stack demonstrated in: 프로젝트, 수업, 활동, 연구\n"
+                + "- Do not exaggerate production-level experience\n\n"
+                + "## RULE 5: Achievement Priority\n"
+                + "Awards, certifications, and notable achievements must appear prominently. "
+                + "Examples: 해커톤 대상, SQLD, OPIc, 공모전 수상. If a prize tier exists, preserve it exactly (대상 / 최우수 / 우수 등).\n\n"
                 + "---\n\n"
-                + "# STEP 4: HTML — **blueStyle** (mandatory)\n\n"
-                + "## 4-A: CSS — COPY THIS BLOCK VERBATIM. Do not change any value, color, or class name.\n\n"
+                + "# STEP 4: USER-SELECTED DESIGN OPTIONS\n\n"
+                + "The portfolio design MUST adapt based on the user-selected options in `[design_preferences]`.\n"
+                + "If the `[design_preferences]` block is missing or empty, **skip STEP 4 entirely** and use the default blue style in STEP 5-A.\n\n"
+                + "## 4-A. Layout Style\n"
+                + "User may choose ONE of: 단일 칼럼 / 랜딩 페이지 / 사이드바 / 카드 그리드\n\n"
+                + "Layout guidelines:\n"
+                + "- 단일 칼럼: Resume/document style, vertical reading flow, print-friendly priority\n"
+                + "- 랜딩 페이지: Hero section emphasis, modern section transitions, project-first presentation\n"
+                + "- 사이드바: Persistent profile/info area, main content separated, traditional developer portfolio structure\n"
+                + "- 카드 그리드: Card-based modular sections, strong visual separation, suitable for project-heavy candidates\n\n"
+                + "## 4-B. Color Theme\n"
+                + "User may choose ONE of: indigo / emerald / slate / rose / amber / cyan\n\n"
+                + "Token system:\n"
+                + "```json\n"
+                + "{\n"
+                + "  \"indigo\":  { \"primary\": \"#6366F1\", \"secondary\": \"#818CF8\", \"soft\": \"#C7D2FE\" },\n"
+                + "  \"emerald\": { \"primary\": \"#10B981\", \"secondary\": \"#34D399\", \"soft\": \"#A7F3D0\" },\n"
+                + "  \"slate\":   { \"primary\": \"#334155\", \"secondary\": \"#64748B\", \"soft\": \"#CBD5E1\" },\n"
+                + "  \"rose\":    { \"primary\": \"#F43F5E\", \"secondary\": \"#FB7185\", \"soft\": \"#FFE4E6\" },\n"
+                + "  \"amber\":   { \"primary\": \"#F59E0B\", \"secondary\": \"#FBBF24\", \"soft\": \"#FEF3C7\" },\n"
+                + "  \"cyan\":    { \"primary\": \"#06B6D4\", \"secondary\": \"#22D3EE\", \"soft\": \"#CFFAFE\" }\n"
+                + "}\n"
+                + "```\n\n"
+                + "Color usage rules:\n"
+                + "- primary → headings / buttons / emphasis\n"
+                + "- secondary → hover / accents / gradients\n"
+                + "- soft → badge background / section tint / chips\n"
+                + "Do not introduce unrelated dominant colors.\n\n"
+                + "## 4-C. Density Mode\n"
+                + "- 1페이지 내: Compress spacing, prioritize strongest projects only, reduce verbose descriptions, optimize for A4 print\n"
+                + "- 페이지 제한 없음: Allow detailed descriptions, include additional activities/projects, more breathing room and spacing, richer section hierarchy\n\n"
+                + "## 4-D. Additional Custom Requests\n"
+                + "Reflect extra user customization (preferred emphasis areas, section reorder requests, wording preferences) unless they conflict with honesty, readability, accessibility, or print usability.\n\n"
+                + "---\n\n"
+                + "# STEP 5: HTML REQUIREMENTS\n\n"
+                + "The generated HTML MUST:\n"
+                + "- be fully self-contained (internal CSS only)\n"
+                + "- support responsive layout and print CSS\n"
+                + "- render Korean correctly (Noto Sans KR / Inter)\n"
+                + "- use semantic HTML; avoid unnecessary JS frameworks\n"
+                + "- maintain accessibility and recruiter readability\n\n"
+                + "## 5-A. Default Style (use ONLY when `[design_preferences]` is missing or empty)\n"
+                + "COPY THIS `<style>` BLOCK VERBATIM. Do not change any value, color, or class name.\n\n"
                 + "```html\n"
                 + "<style>\n"
                 + CSS
                 + "\n</style>\n"
                 + "```\n\n"
-                + "## 4-B: Head — use exactly this structure\n"
+                + "Use this `<head>`:\n"
                 + "```html\n"
                 + "<!DOCTYPE html>\n"
                 + "<html lang=\"ko\">\n"
@@ -1309,10 +1396,10 @@ public class PortfolioHtmlExportService {
                 + "  <link rel=\"preconnect\" href=\"https://fonts.googleapis.com\" />\n"
                 + "  <link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin />\n"
                 + "  <link href=\"https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap\" rel=\"stylesheet\" />\n"
-                + "  [PASTE THE VERBATIM <style> BLOCK FROM 4-A HERE]\n"
+                + "  [PASTE THE VERBATIM <style> BLOCK FROM ABOVE HERE]\n"
                 + "</head>\n"
                 + "```\n\n"
-                + "## 4-C: Body skeleton — use **exactly** these class names\n"
+                + "Use this body skeleton with **exactly** these class names:\n"
                 + "```html\n"
                 + "<body>\n"
                 + "  <div class=\"page\">\n"
@@ -1366,29 +1453,43 @@ public class PortfolioHtmlExportService {
                 + "  </div>\n"
                 + "</body>\n"
                 + "```\n\n"
+                + "## 5-B. Custom Style (use when `[design_preferences]` is provided)\n"
+                + "You may freely choose CSS structure, class naming, spacing system, typography scale, responsive behavior, and component structure — as long as they follow the selected layout, color theme, and density mode from STEP 4. Do **not** copy the default `<style>` from 5-A in this case.\n\n"
                 + "---\n\n"
-                + "# STEP 5: QUALITY CHECKLIST (Self-verify silently before outputting HTML)\n"
-                + "- [ ] Clarification questions were asked and answered before generating\n"
-                + "- [ ] Text preview was confirmed by user before generating HTML\n"
-                + "- [ ] `<style>` block is copied verbatim from 4-A\n"
-                + "- [ ] No invented data (metrics, links, names not in input)\n"
-                + "- [ ] All tech stack badges appear in at least one project or course\n"
-                + "- [ ] Max 3 projects, ordered by technical weight\n"
-                + "- [ ] About Me is ≤ 3 sentences\n"
-                + "- [ ] Empty input fields → sections omitted entirely\n"
-                + "- [ ] HTML is a single file, fully self-contained\n"
-                + "- [ ] Korean text renders correctly with Noto Sans KR\n"
+                + "# STEP 6: CONTENT STRUCTURE REQUIREMENTS\n\n"
+                + "Recommended sections (omit empty sections automatically):\n"
+                + "- Header / Hero\n"
+                + "- About Me\n"
+                + "- Core Tech Stack\n"
+                + "- Featured Projects (max 3 emphasized)\n"
+                + "- Technical Experience\n"
+                + "- Activities / Leadership\n"
+                + "- Awards / Certifications\n"
+                + "- Education\n"
+                + "- Contact\n\n"
+                + "Each project should contain: project name, concise description, technologies, contribution scope, and repository link (if exists).\n\n"
+                + "---\n\n"
+                + "# STEP 7: QUALITY CHECKLIST (silent, before output)\n"
+                + "- [ ] No fabricated information\n"
+                + "- [ ] Layout matches selected style (or default blue style if `[design_preferences]` missing)\n"
+                + "- [ ] Colors follow selected theme (or default blue if `[design_preferences]` missing)\n"
+                + "- [ ] Density mode respected\n"
+                + "- [ ] Korean readability maintained (Noto Sans KR)\n"
                 + "- [ ] Print stylesheet included\n"
-                + "- [ ] blueStyle class names and layout (sidebar + main + timelines + project cards)\n";
+                + "- [ ] Responsive layout works\n"
+                + "- [ ] Important projects prioritized (max 3 emphasized)\n"
+                + "- [ ] Empty sections omitted\n"
+                + "- [ ] HTML is a single file, fully self-contained\n";
     }
 
     /** Archive / self-assessment prompt — never mix with {@link #PROMPT_HEAD}. */
     private static final String ARCHIVE_PROMPT_HEAD =
             "# ROLE\n"
-            + "You are a calm, honest mentor for CS students in Korea. Your job is to help them see their real progress, name strengths grounded in evidence, surface gaps visible from what is (and is not) in their data, and suggest realistic next steps—not to sell them to recruiters.\n\n"
+            + "You are a calm, honest mentor for CS students in Korea. Your job is to help them see their real progress, name strengths grounded in evidence, surface gaps visible from what is (and is not) in their data, and suggest realistic next steps — not to sell them to recruiters.\n\n"
             + "---\n\n"
             + "# TASK\n"
             + "Generate a single-file, self-contained HTML page from STEP 2 only. Tone: neutral and reflective. The reader is the student themselves (and maybe an advisor), not a hiring manager.\n\n"
+            + "The design direction, color palette, typography, and layout are NOT predetermined. Decide them dynamically from the `[design_preferences]` block in STEP 2 (when provided). If `[design_preferences]` is missing or empty, fall back to the **default blue style** described in STEP 5-A.\n\n"
             + "---\n\n"
             + "# STEP 1: ONE-SHOT (Archive mode)\n"
             + "Do **not** ask clarifying questions. Do **not** wait for confirmation. Do **not** simulate a chat. Read STEP 2 and output the HTML in this single response.\n\n"
@@ -1453,12 +1554,14 @@ public class PortfolioHtmlExportService {
             + "@media print{body{background-color:#ffffff;}.page{margin:0;padding:0;}.card{box-shadow:none;border-radius:0;border:none;}.sidebar{border-right:1px solid #e5e7eb;}.project-card{box-shadow:none;}a{color:#000000;text-decoration:none;}}";
 
     /**
-     * Archive prompt tail: embeds {@link #CSS} verbatim so the model copies the same stylesheet as server export.
+     * Archive prompt tail: embeds {@link #CSS} verbatim in STEP 5-A so the model copies the same stylesheet as
+     * server export when no {@code [design_preferences]} is provided. When preferences are provided, the model
+     * picks layout / color theme / density dynamically per STEP 4.
      */
     private String buildArchivePromptTail() {
         return "\n```\n\n"
                 + "---\n\n"
-                + "# STEP 3: RULES — MUST FOLLOW\n\n"
+                + "# STEP 3: GENERATION RULES — MUST FOLLOW ALL\n\n"
                 + "## RULE 1: Ordering of evidence (match the narrative to STEP 2 section order)\n"
                 + "1. After intro/context, present **mileage_list** items in the order given (already sorted by semester, then category).\n"
                 + "2. Then **activities** in the order given (chronological by start date).\n"
@@ -1474,14 +1577,53 @@ public class PortfolioHtmlExportService {
                 + "- Never invent metrics, employers, awards, or repos not in STEP 2.\n"
                 + "- If a section has no lines, omit it or note clearly that nothing was selected.\n\n"
                 + "---\n\n"
-                + "# STEP 4: HTML — **blueStyle** (mandatory)\n\n"
-                + "## 4-A: CSS — COPY THIS BLOCK VERBATIM. Do not change any value, color, or class name.\n\n"
+                + "# STEP 4: USER-SELECTED DESIGN OPTIONS\n\n"
+                + "If the `[design_preferences]` block is missing or empty, **skip STEP 4 entirely** and use the default blue style in STEP 5-A.\n\n"
+                + "## 4-A. Layout Style\n"
+                + "User may choose ONE of: 단일 칼럼 / 랜딩 페이지 / 사이드바 / 카드 그리드\n\n"
+                + "Layout guidelines (reflective variant):\n"
+                + "- 단일 칼럼: Document/notebook style, vertical reading flow, print-friendly priority\n"
+                + "- 랜딩 페이지: Section-anchored sequence, soft transitions, intro-first presentation\n"
+                + "- 사이드바: Persistent profile/info area, main reflection separated\n"
+                + "- 카드 그리드: Card-based modular sections, strong visual separation\n\n"
+                + "## 4-B. Color Theme\n"
+                + "User may choose ONE of: indigo / emerald / slate / rose / amber / cyan\n\n"
+                + "Token system:\n"
+                + "```json\n"
+                + "{\n"
+                + "  \"indigo\":  { \"primary\": \"#6366F1\", \"secondary\": \"#818CF8\", \"soft\": \"#C7D2FE\" },\n"
+                + "  \"emerald\": { \"primary\": \"#10B981\", \"secondary\": \"#34D399\", \"soft\": \"#A7F3D0\" },\n"
+                + "  \"slate\":   { \"primary\": \"#334155\", \"secondary\": \"#64748B\", \"soft\": \"#CBD5E1\" },\n"
+                + "  \"rose\":    { \"primary\": \"#F43F5E\", \"secondary\": \"#FB7185\", \"soft\": \"#FFE4E6\" },\n"
+                + "  \"amber\":   { \"primary\": \"#F59E0B\", \"secondary\": \"#FBBF24\", \"soft\": \"#FEF3C7\" },\n"
+                + "  \"cyan\":    { \"primary\": \"#06B6D4\", \"secondary\": \"#22D3EE\", \"soft\": \"#CFFAFE\" }\n"
+                + "}\n"
+                + "```\n\n"
+                + "Color usage rules:\n"
+                + "- primary → headings / emphasis\n"
+                + "- secondary → hover / accents / gradients\n"
+                + "- soft → badge background / section tint / chips\n"
+                + "Do not introduce unrelated dominant colors.\n\n"
+                + "## 4-C. Density Mode\n"
+                + "- 1페이지 내: Compress spacing, prioritize strongest evidence, reduce verbose descriptions, optimize for A4 print\n"
+                + "- 페이지 제한 없음: Allow detailed reflection, include additional notes, more breathing room and spacing\n\n"
+                + "## 4-D. Additional Custom Requests\n"
+                + "Reflect extra user customization unless they conflict with honesty, readability, accessibility, or print usability.\n\n"
+                + "---\n\n"
+                + "# STEP 5: HTML REQUIREMENTS\n\n"
+                + "The generated HTML MUST:\n"
+                + "- be fully self-contained (internal CSS only)\n"
+                + "- support responsive layout and print CSS\n"
+                + "- render Korean correctly (Noto Sans KR / Inter)\n"
+                + "- use semantic HTML; avoid unnecessary JS frameworks\n\n"
+                + "## 5-A. Default Style (use ONLY when `[design_preferences]` is missing or empty)\n"
+                + "COPY THIS `<style>` BLOCK VERBATIM. Do not change any value, color, or class name.\n\n"
                 + "```html\n"
                 + "<style>\n"
                 + CSS
                 + "\n</style>\n"
                 + "```\n\n"
-                + "## 4-B: Head — use exactly this structure\n"
+                + "Use this `<head>`:\n"
                 + "```html\n"
                 + "<!DOCTYPE html>\n"
                 + "<html lang=\"ko\">\n"
@@ -1492,10 +1634,10 @@ public class PortfolioHtmlExportService {
                 + "  <link rel=\"preconnect\" href=\"https://fonts.googleapis.com\" />\n"
                 + "  <link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin />\n"
                 + "  <link href=\"https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap\" rel=\"stylesheet\" />\n"
-                + "  [PASTE THE VERBATIM <style> BLOCK FROM 4-A HERE]\n"
+                + "  [PASTE THE VERBATIM <style> BLOCK FROM ABOVE HERE]\n"
                 + "</head>\n"
                 + "```\n\n"
-                + "## 4-C: Body skeleton — use **exactly** these class names\n"
+                + "Use this body skeleton with **exactly** these class names:\n"
                 + "```html\n"
                 + "<body>\n"
                 + "  <div class=\"page\">\n"
@@ -1508,7 +1650,6 @@ public class PortfolioHtmlExportService {
                 + "            <div class=\"school\">[학과]</div>\n"
                 + "            <div class=\"meta-line\">[학년/학기]</div>\n"
                 + "            <div class=\"summary-chip\"><span>[핵심 한줄]</span></div>\n"
-                + "            <!-- TECH STACK -->\n"
                 + "            <div class=\"section\" style=\"margin-bottom:0;\">\n"
                 + "              <div class=\"section-header\" style=\"margin-bottom:6px;\">\n"
                 + "                <div class=\"section-marker\"></div>\n"
@@ -1516,10 +1657,8 @@ public class PortfolioHtmlExportService {
                 + "              </div>\n"
                 + "              <div class=\"pill-group\">\n"
                 + "                <div class=\"pill\">[tech1]</div>\n"
-                + "                <!-- repeat per tech -->\n"
                 + "              </div>\n"
                 + "            </div>\n"
-                + "            <!-- CONTACT -->\n"
                 + "            <div class=\"contact-block\">\n"
                 + "              <div class=\"contact-label\">Contact</div>\n"
                 + "              <div class=\"contact-item\"><span class=\"icon\">📧</span><a href=\"mailto:[email]\">[email]</a></div>\n"
@@ -1530,7 +1669,6 @@ public class PortfolioHtmlExportService {
                 + "          </div>\n"
                 + "        </aside>\n"
                 + "        <main class=\"main\">\n"
-                + "          <!-- Each reflective section: -->\n"
                 + "          <section class=\"section\">\n"
                 + "            <div class=\"section-header\">\n"
                 + "              <div class=\"section-marker\"></div>\n"
@@ -1540,10 +1678,7 @@ public class PortfolioHtmlExportService {
                 + "              </div>\n"
                 + "            </div>\n"
                 + "            <div class=\"section-body\">\n"
-                + "              <!-- use .about-text+<p> for prose -->\n"
-                + "              <!-- use .timeline + .timeline-item for lists -->\n"
-                + "              <!-- use .achievements-box for gaps/warnings -->\n"
-                + "              <!-- use .project-card for project entries -->\n"
+                + "              <!-- prose → .about-text + <p> | lists → .timeline + .timeline-item | gaps/highlights → .achievements-box | projects → .project-card -->\n"
                 + "            </div>\n"
                 + "          </section>\n"
                 + "          <footer>[footer text]</footer>\n"
@@ -1553,17 +1688,32 @@ public class PortfolioHtmlExportService {
                 + "  </div>\n"
                 + "</body>\n"
                 + "```\n\n"
-                + "## 4-D: Section title renaming allowed\n"
-                + "You may rename section **titles** for reflective tone (e.g. \"STRENGTHS\", \"GAPS & NEXT STEPS\", \"TECH EVIDENCE\") "
-                + "but **never change class names**.\n\n"
+                + "Section titles may be renamed for reflective tone (e.g. \"STRENGTHS\", \"GAPS & NEXT STEPS\", \"TECH EVIDENCE\") but **never change class names** when using the default style.\n\n"
+                + "## 5-B. Custom Style (use when `[design_preferences]` is provided)\n"
+                + "You may freely choose CSS structure, class naming, spacing system, typography scale, responsive behavior, and component structure — as long as they follow the selected layout, color theme, and density mode from STEP 4. Do **not** copy the default `<style>` from 5-A in this case.\n\n"
                 + "---\n\n"
-                + "# STEP 5: CHECKLIST (silent, before you output HTML)\n"
+                + "# STEP 6: CONTENT STRUCTURE REQUIREMENTS\n\n"
+                + "Recommended reflective sections (omit empty sections automatically):\n"
+                + "- Header / Intro\n"
+                + "- About Me (reflective)\n"
+                + "- Tech Evidence\n"
+                + "- Activities / Experience (chronological)\n"
+                + "- Coursework & Mileage\n"
+                + "- Projects & Repos\n"
+                + "- Strengths\n"
+                + "- Gaps & Next Steps\n"
+                + "- Contact\n\n"
+                + "---\n\n"
+                + "# STEP 7: QUALITY CHECKLIST (silent, before output)\n"
                 + "- [ ] One-shot: no questions to the user\n"
-                + "- [ ] `<style>` block is **copied verbatim** from 4-A — not rewritten\n"
-                + "- [ ] Sidebar uses: `.name`, `.role`, `.school`, `.meta-line`, `.summary-chip`, `.pill-group`+`.pill`, `.contact-block`+`.contact-item`+`a.link-chip`\n"
-                + "- [ ] Main uses: `.section`, `.section-header`, `.section-marker`, `.section-title`, `.section-subtitle`, `.section-body`\n"
-                + "- [ ] Prose → `.about-text` + `<p>` | Lists → `.timeline` + `.timeline-item` | Highlights → `.achievements-box` | Projects → `.project-card`\n"
+                + "- [ ] Tone is reflective, not resume hype\n"
                 + "- [ ] No fabricated facts; gaps/growth tied to missing data only\n"
-                + "- [ ] Single self-contained HTML file\n";
+                + "- [ ] Layout matches selected style (or default blue style if `[design_preferences]` missing)\n"
+                + "- [ ] Colors follow selected theme (or default blue if `[design_preferences]` missing)\n"
+                + "- [ ] Density mode respected\n"
+                + "- [ ] Korean readability maintained (Noto Sans KR)\n"
+                + "- [ ] Print stylesheet included\n"
+                + "- [ ] Empty sections omitted\n"
+                + "- [ ] HTML is a single file, fully self-contained\n";
     }
 }

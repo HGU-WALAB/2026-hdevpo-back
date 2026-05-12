@@ -15,6 +15,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -36,6 +37,7 @@ public class PortfolioCvService {
 
     private final PortfolioCvRepository cvRepository;
     private final PortfolioHtmlExportService htmlExportService;
+    private final OpenAiClient openAiClient;
 
     /**
      * Builds the CV prompt and creates a CV record with empty html.
@@ -57,6 +59,10 @@ public class PortfolioCvService {
                         .jobPosting(request.getJob_posting())
                         .targetPosition(request.getTarget_position())
                         .additionalNotes(request.getAdditional_notes())
+                        .designPreferences(normalizeDesignPreferences(request.getDesign_preferences()))
+                        .selectedRepoIds(copyOrEmpty(request.getSelected_repo_ids()))
+                        .selectedMileageIds(copyOrEmpty(request.getSelected_mileage_ids()))
+                        .selectedActivityIds(copyOrEmpty(request.getSelected_activity_ids()))
                         .mode(mode.getValue())
                         .prompt(prompt)
                         .htmlContent("")
@@ -126,6 +132,62 @@ public class PortfolioCvService {
     }
 
     /**
+     * Rebuilds the prompt for an existing CV (using its stored selections + job info + a new
+     * {@code design_preferences}), then calls OpenAI to render the HTML, and persists everything.
+     * Used by the FE "AI Customize" flow ({@code POST /api/portfolio/cv/{id}/generate-html}).
+     * <p>
+     * Two-phase save semantics: the regenerated prompt is saved <em>before</em> the OpenAI call, so if
+     * OpenAI fails (timeout, rate limit, etc.) the user's design intent is not lost — the FE can show
+     * the prompt and offer a "재시도" button while still showing the previous HTML.
+     * <p>
+     * If the CV was created before {@code selected_*_ids} columns existed (legacy: {@code null}),
+     * regeneration falls back to "no selections" — the FE should re-call {@code POST /build-prompt}.
+     *
+     * @throws com.csee.swplus.mileage.portfolio.exception.OpenAiNotConfiguredException 503 when no API key
+     * @throws com.csee.swplus.mileage.portfolio.exception.OpenAiTimeoutException        504 when OpenAI hangs
+     * @throws com.csee.swplus.mileage.portfolio.exception.OpenAiException               502 for other OpenAI errors
+     */
+    public CvResponse generateHtml(Users user, Long id, CvRegeneratePromptRequest request) {
+        PortfolioCv cv = cvRepository.findByIdAndUser_IdAndIsDeletedFalse(id, user.getId())
+                .orElseThrow(() -> new DoNotExistException("해당 이력서를 찾을 수 없습니다."));
+        ensurePublicToken(cv);
+
+        DesignPreferencesDto newPrefs = request != null
+                ? normalizeDesignPreferences(request.getDesign_preferences())
+                : null;
+        String modelOverride = request != null ? trimToNull(request.getModel()) : null;
+
+        CvBuildPromptRequest synthetic = new CvBuildPromptRequest();
+        synthetic.setMode(cv.getMode());
+        synthetic.setJob_posting(cv.getJobPosting());
+        synthetic.setTarget_position(cv.getTargetPosition());
+        synthetic.setAdditional_notes(cv.getAdditionalNotes());
+        synthetic.setTitle(cv.getTitle());
+        synthetic.setSelected_repo_ids(copyOrEmpty(cv.getSelectedRepoIds()));
+        synthetic.setSelected_mileage_ids(copyOrEmpty(cv.getSelectedMileageIds()));
+        synthetic.setSelected_activity_ids(copyOrEmpty(cv.getSelectedActivityIds()));
+        synthetic.setDesign_preferences(newPrefs);
+
+        CvPromptMode mode = CvPromptMode.fromRequest(cv.getMode());
+        String prompt = mode == CvPromptMode.CV
+                ? htmlExportService.buildCvPrompt(user, synthetic)
+                : htmlExportService.buildArchivePrompt(user, synthetic);
+
+        cv.setPrompt(prompt);
+        cv.setDesignPreferences(newPrefs);
+        cvRepository.save(cv);
+
+        OpenAiClient.Result result = openAiClient.generateHtml(prompt, modelOverride);
+        cv.setHtmlContent(result.getHtml());
+        cv.setModelUsed(result.getModel());
+        cv.setTokensUsed(result.getTotalTokens());
+        cv.setLastGeneratedAt(LocalDateTime.now());
+        cvRepository.save(cv);
+
+        return toResponse(cv);
+    }
+
+    /**
      * Updates title and/or html_content only. User must own the CV.
      */
     public CvResponse patch(Users user, Long id, CvPatchRequest request) {
@@ -140,6 +202,12 @@ public class PortfolioCvService {
         }
         if (request.getIs_public() != null) {
             cv.setPublic(Boolean.TRUE.equals(request.getIs_public()));
+        }
+        if (request.getPrompt() != null) {
+            cv.setPrompt(request.getPrompt());
+        }
+        if (request.getDesign_preferences() != null) {
+            cv.setDesignPreferences(normalizeDesignPreferences(request.getDesign_preferences()));
         }
         cvRepository.save(cv);
         return toResponse(cv);
@@ -228,9 +296,16 @@ public class PortfolioCvService {
                 .job_posting(cv.getJobPosting())
                 .target_position(cv.getTargetPosition())
                 .additional_notes(cv.getAdditionalNotes())
+                .design_preferences(cv.getDesignPreferences())
+                .selected_repo_ids(cv.getSelectedRepoIds())
+                .selected_mileage_ids(cv.getSelectedMileageIds())
+                .selected_activity_ids(cv.getSelectedActivityIds())
                 .mode(cv.getMode() != null ? cv.getMode() : CvPromptMode.CV.getValue())
                 .prompt(cv.getPrompt())
                 .html_content(cv.getHtmlContent())
+                .model_used(cv.getModelUsed())
+                .tokens_used(cv.getTokensUsed())
+                .last_generated_at(cv.getLastGeneratedAt())
                 .public_token(cv.getPublicToken())
                 .is_public(cv.isPublic())
                 .created_at(cv.getRegdate())
@@ -245,12 +320,52 @@ public class PortfolioCvService {
                 .job_posting(ellipsis(cv.getJobPosting(), CV_LIST_JOB_POSTING_MAX))
                 .target_position(cv.getTargetPosition())
                 .additional_notes(ellipsis(cv.getAdditionalNotes(), CV_LIST_NOTES_MAX))
+                .design_preferences(cv.getDesignPreferences())
                 .mode(cv.getMode() != null ? cv.getMode() : CvPromptMode.CV.getValue())
                 .public_token(cv.getPublicToken())
                 .is_public(cv.isPublic())
                 .created_at(cv.getRegdate())
                 .updated_at(cv.getModdate())
                 .build();
+    }
+
+    /**
+     * Trim values and drop the whole DTO when every sub-field is blank, so the DB stays {@code null}
+     * (instead of storing an "all-blank" JSON object).
+     */
+    private static DesignPreferencesDto normalizeDesignPreferences(DesignPreferencesDto in) {
+        if (in == null) {
+            return null;
+        }
+        String layout = trimToNull(in.getLayout());
+        String color = trimToNull(in.getColor_theme());
+        String density = trimToNull(in.getDensity());
+        String notes = trimToNull(in.getAdditional_notes());
+        if (layout == null && color == null && density == null && notes == null) {
+            return null;
+        }
+        return DesignPreferencesDto.builder()
+                .layout(layout)
+                .color_theme(color)
+                .density(density)
+                .additional_notes(notes)
+                .build();
+    }
+
+    private static String trimToNull(String s) {
+        if (s == null) {
+            return null;
+        }
+        String t = s.trim();
+        return t.isEmpty() ? null : t;
+    }
+
+    /** Defensive copy. Returns an empty list (never null) so prompt builders can iterate safely. */
+    private static List<Long> copyOrEmpty(List<Long> in) {
+        if (in == null || in.isEmpty()) {
+            return new ArrayList<>();
+        }
+        return new ArrayList<>(in);
     }
 
     private static String ellipsis(String s, int maxLen) {
