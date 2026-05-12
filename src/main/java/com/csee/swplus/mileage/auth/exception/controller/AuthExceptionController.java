@@ -3,6 +3,9 @@ package com.csee.swplus.mileage.auth.exception.controller;
 import com.csee.swplus.mileage.auth.exception.DoNotExistException;
 import com.csee.swplus.mileage.auth.exception.FailedHisnetLoginException;
 import com.csee.swplus.mileage.base.response.ExceptionResponse;
+import com.csee.swplus.mileage.portfolio.exception.OpenAiException;
+import com.csee.swplus.mileage.portfolio.exception.OpenAiNotConfiguredException;
+import com.csee.swplus.mileage.portfolio.exception.OpenAiTimeoutException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
@@ -86,6 +89,30 @@ public class AuthExceptionController {
                 .message(msg != null ? msg : "데이터 제약 조건 위반")
                 .build();
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+    }
+
+    /** OPENAI_API_KEY missing → 503 (FE: "AI 설정이 누락되었습니다, 잠시 후 다시 시도해 주세요"). */
+    @ExceptionHandler(OpenAiNotConfiguredException.class)
+    public ResponseEntity<ExceptionResponse> handleOpenAiNotConfigured(OpenAiNotConfiguredException e) {
+        log.warn("OpenAI not configured: {}", e.getMessage());
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(
+                ExceptionResponse.builder().error("Service Unavailable").message(e.getMessage()).build());
+    }
+
+    /** OpenAI request timed out → 504 (FE: "AI 응답이 지연되어 다시 시도해 주세요"). Prompt is still saved on the CV. */
+    @ExceptionHandler(OpenAiTimeoutException.class)
+    public ResponseEntity<ExceptionResponse> handleOpenAiTimeout(OpenAiTimeoutException e) {
+        log.warn("OpenAI timeout: {}", e.getMessage());
+        return ResponseEntity.status(HttpStatus.GATEWAY_TIMEOUT).body(
+                ExceptionResponse.builder().error("Gateway Timeout").message(e.getMessage()).build());
+    }
+
+    /** Generic OpenAI failure (HTTP error from OpenAI, parse failure, etc.) → 502. Prompt is still saved on the CV. */
+    @ExceptionHandler(OpenAiException.class)
+    public ResponseEntity<ExceptionResponse> handleOpenAiException(OpenAiException e) {
+        log.warn("OpenAI error: {}", e.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(
+                ExceptionResponse.builder().error("Bad Gateway").message(e.getMessage()).build());
     }
 
     /** Returns 500 with exception details in body so we can see the cause (e.g. for portfolio 500). */
