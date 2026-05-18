@@ -44,10 +44,14 @@ public class PortfolioCvController {
     /**
      * GET /api/portfolio/cv – List all CVs for the user.
      */
+    @Operation(summary = "CV 목록",
+            description = "로그인 사용자의 삭제되지 않은 CV 목록. **total** — 전체 개수 (repositories API와 동일 패턴). "
+                    + "**sort** — `newest` (기본, 최신순) 또는 `favorites` (즐겨찾기 먼저, 그다음 최신순). "
+                    + "각 항목에 **is_favorite** 포함.")
     @GetMapping
-    public ResponseEntity<CvListResponse> list() {
+    public ResponseEntity<CvListResponse> list(@RequestParam(required = false) String sort) {
         Users user = getCurrentUser();
-        return ResponseEntity.ok(portfolioCvService.list(user));
+        return ResponseEntity.ok(portfolioCvService.list(user, sort));
     }
 
     /**
@@ -65,7 +69,7 @@ public class PortfolioCvController {
      * The server does NOT auto-regenerate prompt when design_preferences changes — user edits are preserved.
      */
     @Operation(summary = "CV 부분 수정",
-            description = "title / html_content / is_public / prompt / design_preferences 부분 업데이트. "
+            description = "title / html_content / is_public / is_favorite / prompt / design_preferences 부분 업데이트. "
                     + "design_preferences를 바꿔도 prompt는 자동 재생성되지 않습니다 (사용자 편집 보존). "
                     + "디자인 변경 + HTML 자동 생성은 POST /cv/{id}/generate-html 을 호출하세요.")
     @PatchMapping("/{id}")
