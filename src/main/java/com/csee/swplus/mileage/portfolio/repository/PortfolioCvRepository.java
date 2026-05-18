@@ -12,6 +12,8 @@ public interface PortfolioCvRepository extends JpaRepository<PortfolioCv, Long> 
 
     List<PortfolioCv> findByUser_IdAndIsDeletedFalseOrderByRegdateDesc(Long userId);
 
+    List<PortfolioCv> findByUser_IdAndIsDeletedFalseOrderByIsFavoriteDescRegdateDesc(Long userId);
+
     Optional<PortfolioCv> findByIdAndUser_IdAndIsDeletedFalse(Long id, Long userId);
 
     /** Includes deleted rows; used for restore flows. */

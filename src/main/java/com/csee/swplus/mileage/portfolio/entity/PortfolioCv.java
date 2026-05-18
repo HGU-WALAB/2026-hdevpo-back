@@ -102,6 +102,11 @@ public class PortfolioCv extends BaseTime {
     @Column(name = "is_public", nullable = false)
     private boolean isPublic;
 
+    /** User-marked favorite; used for list sort {@code favorites}. */
+    @Column(name = "is_favorite", nullable = false)
+    @Builder.Default
+    private boolean isFavorite = false;
+
     /** Soft delete flag. Deleted CVs are hidden from default list/get/share. */
     @Column(name = "is_deleted", nullable = false)
     @Builder.Default

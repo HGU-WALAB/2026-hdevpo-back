@@ -85,17 +85,35 @@ public class PortfolioCvService {
     }
 
     /**
-     * Lists all CVs for the user, ordered by creation date descending.
+     * Lists all non-deleted CVs for the user.
+     *
+     * @param sort {@code newest} (default) or {@code favorites} (favorites first, then newest)
      */
-    public CvListResponse list(Users user) {
-        List<PortfolioCv> list = cvRepository.findByUser_IdAndIsDeletedFalseOrderByRegdateDesc(user.getId());
+    public CvListResponse list(Users user, String sort) {
+        String sortParam = normalizeListSort(sort);
+        List<PortfolioCv> list = "favorites".equals(sortParam)
+                ? cvRepository.findByUser_IdAndIsDeletedFalseOrderByIsFavoriteDescRegdateDesc(user.getId())
+                : cvRepository.findByUser_IdAndIsDeletedFalseOrderByRegdateDesc(user.getId());
         for (PortfolioCv cv : list) {
             ensurePublicToken(cv);
         }
         List<CvListItem> items = list.stream()
                 .map(this::toListItem)
                 .collect(Collectors.toList());
-        return CvListResponse.builder().cvs(items).build();
+        return CvListResponse.builder()
+                .cvs(items)
+                .total(items.size())
+                .build();
+    }
+
+    private static String normalizeListSort(String sort) {
+        if (sort == null || sort.trim().isEmpty() || "newest".equalsIgnoreCase(sort.trim())) {
+            return "newest";
+        }
+        if ("favorites".equalsIgnoreCase(sort.trim())) {
+            return "favorites";
+        }
+        throw new IllegalArgumentException("sort must be one of: newest, favorites");
     }
 
     /**
@@ -203,6 +221,9 @@ public class PortfolioCvService {
         if (request.getIs_public() != null) {
             cv.setPublic(Boolean.TRUE.equals(request.getIs_public()));
         }
+        if (request.getIs_favorite() != null) {
+            cv.setFavorite(Boolean.TRUE.equals(request.getIs_favorite()));
+        }
         if (request.getPrompt() != null) {
             cv.setPrompt(request.getPrompt());
         }
@@ -308,6 +329,7 @@ public class PortfolioCvService {
                 .last_generated_at(cv.getLastGeneratedAt())
                 .public_token(cv.getPublicToken())
                 .is_public(cv.isPublic())
+                .is_favorite(cv.isFavorite())
                 .created_at(cv.getRegdate())
                 .updated_at(cv.getModdate())
                 .build();
@@ -324,6 +346,7 @@ public class PortfolioCvService {
                 .mode(cv.getMode() != null ? cv.getMode() : CvPromptMode.CV.getValue())
                 .public_token(cv.getPublicToken())
                 .is_public(cv.isPublic())
+                .is_favorite(cv.isFavorite())
                 .created_at(cv.getRegdate())
                 .updated_at(cv.getModdate())
                 .build();

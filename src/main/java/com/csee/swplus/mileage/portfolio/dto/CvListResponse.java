@@ -17,4 +17,7 @@ import java.util.List;
 public class CvListResponse {
 
     private List<CvListItem> cvs;
+
+    /** Total non-deleted CVs for the user (same scope as {@code cvs} before pagination). */
+    private Integer total;
 }
