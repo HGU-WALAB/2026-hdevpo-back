@@ -43,6 +43,7 @@ public class CvResponse {
     /** Numeric share id; public HTML when is_public is true. */
     private String public_token;
     private boolean is_public;
+    private boolean is_favorite;
     private LocalDateTime created_at;
     private LocalDateTime updated_at;
 }

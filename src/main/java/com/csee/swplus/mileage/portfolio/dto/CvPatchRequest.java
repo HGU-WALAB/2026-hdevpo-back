@@ -26,6 +26,9 @@ public class CvPatchRequest {
     /** When set, toggles whether the CV HTML is reachable without login (public URL). */
     private Boolean is_public;
 
+    /** When set, toggles whether the CV is marked as a favorite. */
+    private Boolean is_favorite;
+
     /**
      * Editable raw prompt text (the assembled string the user copies into the LLM).
      * The server does NOT regenerate this when {@link #design_preferences} changes — user edits are kept as-is.

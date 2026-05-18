@@ -30,6 +30,7 @@ public class CvListItem {
     private String mode;
     private String public_token;
     private boolean is_public;
+    private boolean is_favorite;
     private LocalDateTime created_at;
     private LocalDateTime updated_at;
 }
