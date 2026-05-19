@@ -40,7 +40,9 @@ public class PortfolioActivitiesController {
     }
 
     @PostMapping
-    @Operation(summary = "활동 추가", description = "생성된 id로 이후 PUT/PATCH/DELETE")
+    @Operation(summary = "활동 추가",
+            description = "생성된 id로 이후 PUT/PATCH/DELETE. Optional: host, role, achievements, achievements_detail "
+                    + "(기간은 start_date/end_date). Blank → null.")
     public ResponseEntity<ActivityResponse> postActivity(@Valid @RequestBody ActivityRequest request) {
         Users user = getCurrentUser();
         return ResponseEntity.ok(portfolioService.createActivity(user, request));
@@ -55,8 +57,11 @@ public class PortfolioActivitiesController {
 
     /** Path-variable route registered before parameterless PATCH so /activities/{id} is not ambiguous. */
     @PatchMapping("/{id}")
-    @Operation(summary = "활동 일부 수정", description = "PATCH — null이 아닌 필드만 반영 (url/tags 포함)")
-    public ResponseEntity<ActivityResponse> patchActivity(@PathVariable Long id, @RequestBody ActivityPatchRequest request) {
+    @Operation(summary = "활동 일부 수정",
+            description = "PATCH — null이 아닌 필드만 반영. host/role/achievements/achievements_detail: "
+                    + "null=변경 없음, \"\"=clear. url/tags 동일.")
+    public ResponseEntity<ActivityResponse> patchActivity(@PathVariable Long id,
+            @Valid @RequestBody ActivityPatchRequest request) {
         Users user = getCurrentUser();
         return ResponseEntity.ok(portfolioService.patchActivity(user, id, request != null ? request : new ActivityPatchRequest()));
     }
