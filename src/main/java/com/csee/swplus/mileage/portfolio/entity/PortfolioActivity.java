@@ -37,6 +37,22 @@ public class PortfolioActivity extends BaseTime {
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
+    /** Organizer / host (주최). */
+    @Column(name = "host", length = 255)
+    private String host;
+
+    /** User role in the activity (역할). */
+    @Column(name = "role", length = 500)
+    private String role;
+
+    /** Outcomes summary (성과 및 결과). */
+    @Column(name = "achievements", columnDefinition = "TEXT")
+    private String achievements;
+
+    /** Detailed outcome description (성과 설명). */
+    @Column(name = "achievements_detail", columnDefinition = "TEXT")
+    private String achievementsDetail;
+
     /** Optional link (e.g. club site, certificate page). */
     @Column(name = "url", length = 2048)
     private String url;
