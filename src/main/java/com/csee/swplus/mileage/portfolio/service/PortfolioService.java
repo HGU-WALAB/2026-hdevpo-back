@@ -1404,6 +1404,10 @@ public class PortfolioService {
                 .portfolio(portfolio)
                 .title(request.getTitle())
                 .description(request.getDescription())
+                .host(normalizeActivityHost(request.getHost()))
+                .role(normalizeActivityRole(request.getRole()))
+                .achievements(normalizeActivityAchievements(request.getAchievements()))
+                .achievementsDetail(normalizeActivityAchievementsDetail(request.getAchievements_detail()))
                 .url(normalizeActivityUrl(request.getUrl()))
                 .tags(normalizeActivityTags(request.getTags()))
                 .startDate(request.getStart_date())
@@ -1424,6 +1428,10 @@ public class PortfolioService {
                 .orElseThrow(() -> new DoNotExistException("해당 활동을 찾을 수 없습니다."));
         activity.setTitle(request.getTitle());
         activity.setDescription(request.getDescription());
+        activity.setHost(normalizeActivityHost(request.getHost()));
+        activity.setRole(normalizeActivityRole(request.getRole()));
+        activity.setAchievements(normalizeActivityAchievements(request.getAchievements()));
+        activity.setAchievementsDetail(normalizeActivityAchievementsDetail(request.getAchievements_detail()));
         activity.setUrl(normalizeActivityUrl(request.getUrl()));
         activity.setTags(normalizeActivityTags(request.getTags()));
         activity.setStartDate(request.getStart_date());
@@ -1446,6 +1454,8 @@ public class PortfolioService {
         if (request.getDescription() != null) {
             activity.setDescription(request.getDescription());
         }
+        applyActivityDetailFieldsPatch(activity, request.getHost(), request.getRole(),
+                request.getAchievements(), request.getAchievements_detail());
         if (request.getStart_date() != null) {
             activity.setStartDate(request.getStart_date());
         }
@@ -1485,6 +1495,8 @@ public class PortfolioService {
                 activity.setTitle(item.getTitle());
             if (item.getDescription() != null)
                 activity.setDescription(item.getDescription());
+            applyActivityDetailFieldsPatch(activity, item.getHost(), item.getRole(),
+                    item.getAchievements(), item.getAchievements_detail());
             if (item.getStart_date() != null)
                 activity.setStartDate(item.getStart_date());
             if (item.getEnd_date() != null)
@@ -1515,6 +1527,10 @@ public class PortfolioService {
                 .id(a.getId())
                 .title(a.getTitle())
                 .description(a.getDescription())
+                .host(a.getHost())
+                .role(a.getRole())
+                .achievements(a.getAchievements())
+                .achievements_detail(a.getAchievementsDetail())
                 .start_date(a.getStartDate())
                 .end_date(a.getEndDate())
                 .category(a.getCategory())
@@ -1522,6 +1538,57 @@ public class PortfolioService {
                 .url(a.getUrl())
                 .tags(a.getTags() != null ? new ArrayList<>(a.getTags()) : new ArrayList<>())
                 .build();
+    }
+
+    private static final int ACTIVITY_HOST_MAX = 255;
+    private static final int ACTIVITY_ROLE_MAX = 500;
+    private static final int ACTIVITY_ACHIEVEMENTS_MAX = 2000;
+    private static final int ACTIVITY_ACHIEVEMENTS_DETAIL_MAX = 5000;
+
+    private static void applyActivityDetailFieldsPatch(PortfolioActivity activity,
+            String host, String role, String achievements, String achievementsDetail) {
+        if (host != null) {
+            activity.setHost(normalizeActivityHost(host));
+        }
+        if (role != null) {
+            activity.setRole(normalizeActivityRole(role));
+        }
+        if (achievements != null) {
+            activity.setAchievements(normalizeActivityAchievements(achievements));
+        }
+        if (achievementsDetail != null) {
+            activity.setAchievementsDetail(normalizeActivityAchievementsDetail(achievementsDetail));
+        }
+    }
+
+    private static String normalizeActivityHost(String value) {
+        return normalizeOptionalActivityText(value, ACTIVITY_HOST_MAX, "host");
+    }
+
+    private static String normalizeActivityRole(String value) {
+        return normalizeOptionalActivityText(value, ACTIVITY_ROLE_MAX, "role");
+    }
+
+    private static String normalizeActivityAchievements(String value) {
+        return normalizeOptionalActivityText(value, ACTIVITY_ACHIEVEMENTS_MAX, "achievements");
+    }
+
+    private static String normalizeActivityAchievementsDetail(String value) {
+        return normalizeOptionalActivityText(value, ACTIVITY_ACHIEVEMENTS_DETAIL_MAX, "achievements_detail");
+    }
+
+    private static String normalizeOptionalActivityText(String value, int maxLen, String fieldName) {
+        if (value == null) {
+            return null;
+        }
+        String t = value.trim();
+        if (t.isEmpty()) {
+            return null;
+        }
+        if (t.length() > maxLen) {
+            throw new IllegalArgumentException(fieldName + " must be at most " + maxLen + " characters");
+        }
+        return t;
     }
 
     private static String normalizeActivityUrl(String url) {

@@ -20,6 +20,10 @@ public class ActivityResponse {
     private Long id;
     private String title;
     private String description;
+    private String host;
+    private String role;
+    private String achievements;
+    private String achievements_detail;
     private LocalDate start_date;
     private LocalDate end_date;
     /** Category: "activity", "project", "certificate", "camp", "other", etc. */

@@ -5,6 +5,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import javax.validation.constraints.Size;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -24,6 +25,19 @@ public class ActivityPatchItemRequest {
 
     private String title;
     private String description;
+
+    @Size(max = 255)
+    private String host;
+
+    @Size(max = 500)
+    private String role;
+
+    @Size(max = 2000)
+    private String achievements;
+
+    @Size(max = 5000)
+    private String achievements_detail;
+
     private LocalDate start_date;
     private LocalDate end_date;
     private String category;

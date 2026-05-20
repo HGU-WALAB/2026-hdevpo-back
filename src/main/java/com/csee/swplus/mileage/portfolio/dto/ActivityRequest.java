@@ -25,6 +25,18 @@ public class ActivityRequest {
 
     private String description;
 
+    @Size(max = 255)
+    private String host;
+
+    @Size(max = 500)
+    private String role;
+
+    @Size(max = 2000)
+    private String achievements;
+
+    @Size(max = 5000)
+    private String achievements_detail;
+
     @NotNull
     private LocalDate start_date;
 

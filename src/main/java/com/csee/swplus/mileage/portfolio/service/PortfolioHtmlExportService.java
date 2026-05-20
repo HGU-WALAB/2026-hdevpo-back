@@ -144,19 +144,7 @@ public class PortfolioHtmlExportService {
         sb.append("[activities]\n");
         if (activities.getActivities() != null) {
             for (ActivityResponse a : activities.getActivities()) {
-                String title = nullToEmpty(a.getTitle());
-                String desc = nullToEmpty(a.getDescription());
-                String start = a.getStart_date() != null ? a.getStart_date().toString() : "";
-                String end = a.getEnd_date() != null ? a.getEnd_date().toString() : "";
-                sb.append("- ").append(title).append(" (").append(start).append(" ~ ").append(end).append(")");
-                if (!desc.isEmpty()) sb.append(" · ").append(desc);
-                if (a.getUrl() != null && !a.getUrl().trim().isEmpty()) {
-                    sb.append(" · URL: ").append(a.getUrl().trim());
-                }
-                if (a.getTags() != null && !a.getTags().isEmpty()) {
-                    sb.append(" · tags: ").append(String.join(", ", a.getTags()));
-                }
-                sb.append("\n");
+                appendActivityPromptLine(sb, a);
             }
         }
         sb.append("\n");
@@ -261,19 +249,7 @@ public class PortfolioHtmlExportService {
         if (activities.getActivities() != null) {
             for (ActivityResponse a : activities.getActivities()) {
                 if (a.getId() == null || !activityIds.contains(a.getId())) continue;
-                String title = nullToEmpty(a.getTitle());
-                String desc = nullToEmpty(a.getDescription());
-                String start = a.getStart_date() != null ? a.getStart_date().toString() : "";
-                String end = a.getEnd_date() != null ? a.getEnd_date().toString() : "";
-                sb.append("- ").append(title).append(" (").append(start).append(" ~ ").append(end).append(")");
-                if (!desc.isEmpty()) sb.append(" · ").append(desc);
-                if (a.getUrl() != null && !a.getUrl().trim().isEmpty()) {
-                    sb.append(" · URL: ").append(a.getUrl().trim());
-                }
-                if (a.getTags() != null && !a.getTags().isEmpty()) {
-                    sb.append(" · tags: ").append(String.join(", ", a.getTags()));
-                }
-                sb.append("\n");
+                appendActivityPromptLine(sb, a);
             }
         }
         sb.append("\n");
@@ -381,19 +357,7 @@ public class PortfolioHtmlExportService {
 
         sb.append("[activities]\n");
         for (ActivityResponse a : activityList) {
-            String title = nullToEmpty(a.getTitle());
-            String desc = nullToEmpty(a.getDescription());
-            String start = a.getStart_date() != null ? a.getStart_date().toString() : "";
-            String end = a.getEnd_date() != null ? a.getEnd_date().toString() : "";
-            sb.append("- ").append(title).append(" (").append(start).append(" ~ ").append(end).append(")");
-            if (!desc.isEmpty()) sb.append(" · ").append(desc);
-            if (a.getUrl() != null && !a.getUrl().trim().isEmpty()) {
-                sb.append(" · URL: ").append(a.getUrl().trim());
-            }
-            if (a.getTags() != null && !a.getTags().isEmpty()) {
-                sb.append(" · tags: ").append(String.join(", ", a.getTags()));
-            }
-            sb.append("\n");
+            appendActivityPromptLine(sb, a);
         }
         sb.append("\n");
 
@@ -432,6 +396,62 @@ public class PortfolioHtmlExportService {
 
     private String nullToEmpty(Object o) {
         return o == null ? "" : String.valueOf(o);
+    }
+
+    /** Formats one activity for LLM prompt {@code [activities]} blocks. */
+    private static void appendActivityPromptLine(StringBuilder sb, ActivityResponse a) {
+        String title = nullToEmptyStatic(a.getTitle());
+        String start = a.getStart_date() != null ? a.getStart_date().toString() : "";
+        String end = a.getEnd_date() != null ? a.getEnd_date().toString() : "";
+        sb.append("- ").append(title).append(" (").append(start).append(" ~ ").append(end).append(")");
+        appendActivityLabeledLine(sb, "주최", a.getHost());
+        appendActivityLabeledLine(sb, "역할", a.getRole());
+        appendActivityLabeledLine(sb, "성과", a.getAchievements());
+        appendActivityLabeledLine(sb, "성과 설명", a.getAchievements_detail());
+        String desc = nullToEmptyStatic(a.getDescription());
+        if (!desc.isEmpty()) {
+            appendActivityLabeledLine(sb, "설명", desc);
+        }
+        if (a.getUrl() != null && !a.getUrl().trim().isEmpty()) {
+            appendActivityLabeledLine(sb, "URL", a.getUrl().trim());
+        }
+        if (a.getTags() != null && !a.getTags().isEmpty()) {
+            appendActivityLabeledLine(sb, "tags", String.join(", ", a.getTags()));
+        }
+        sb.append("\n");
+    }
+
+    private static void appendActivityLabeledLine(StringBuilder sb, String label, String value) {
+        if (value == null || value.trim().isEmpty()) {
+            return;
+        }
+        sb.append("\n  · ").append(label).append(": ").append(value.trim());
+    }
+
+    /** Combines structured activity fields + description for server-rendered HTML timeline. */
+    private static String buildActivityDisplayDescription(ActivityResponse a) {
+        StringBuilder d = new StringBuilder();
+        appendActivityTextLine(d, "주최", a.getHost());
+        appendActivityTextLine(d, "역할", a.getRole());
+        appendActivityTextLine(d, "성과", a.getAchievements());
+        appendActivityTextLine(d, "성과 설명", a.getAchievements_detail());
+        if (a.getDescription() != null && !a.getDescription().trim().isEmpty()) {
+            if (d.length() > 0) {
+                d.append("\n");
+            }
+            d.append(a.getDescription().trim());
+        }
+        return d.toString();
+    }
+
+    private static void appendActivityTextLine(StringBuilder d, String label, String value) {
+        if (value == null || value.trim().isEmpty()) {
+            return;
+        }
+        if (d.length() > 0) {
+            d.append("\n");
+        }
+        d.append(label).append(": ").append(value.trim());
     }
 
     /**
@@ -885,7 +905,7 @@ public class PortfolioHtmlExportService {
                     continue;
                 }
                 String at = a.getTitle() != null ? a.getTitle().trim() : "";
-                String desc = a.getDescription() != null ? a.getDescription().trim() : "";
+                String desc = buildActivityDisplayDescription(a);
                 String start = a.getStart_date() != null ? a.getStart_date().toString() : "";
                 String end = a.getEnd_date() != null ? a.getEnd_date().toString() : "";
                 String range = buildDateRangeText(start, end);
